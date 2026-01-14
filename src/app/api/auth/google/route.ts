@@ -6,8 +6,16 @@ export async function GET(request: NextRequest) {
   const state = crypto.randomUUID()
   const { searchParams } = new URL(request.url)
   const redirect = searchParams.get('redirect') || '/admin'
+  const mode = searchParams.get('mode') // 'login' for fresh login, 'add' for adding account
 
   const cookieStore = await cookies()
+
+  // If this is a fresh login (from home page), clear any existing session
+  // This ensures the new login creates a new isolated account
+  if (mode === 'login') {
+    cookieStore.delete('session')
+  }
+
   cookieStore.set('oauth_state', state, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',

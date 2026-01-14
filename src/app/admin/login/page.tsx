@@ -32,7 +32,7 @@ function LoginContent() {
         )}
 
         <a
-          href={`/api/auth/google?redirect=${encodeURIComponent(redirect)}`}
+          href={`/api/auth/google?redirect=${encodeURIComponent(redirect)}&mode=login`}
           className="flex items-center justify-center gap-3 w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg hover:bg-zinc-700 transition-colors"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">

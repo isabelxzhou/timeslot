@@ -4,6 +4,9 @@ import { getAllGoogleAccounts, getValidAccessTokenForAccount } from '@/lib/googl
 import { google } from 'googleapis'
 import { getOAuthClient } from '@/lib/google/oauth'
 
+// Prevent caching
+export const dynamic = 'force-dynamic'
+
 interface CalendarEvent {
   id: string
   title: string
@@ -25,12 +28,28 @@ const CALENDAR_COLORS = [
   '#64748B', // slate
 ]
 
+// Helper to get email from session cookie
+function getSessionEmail(sessionCookie: string): string | null {
+  try {
+    const session = JSON.parse(Buffer.from(sessionCookie, 'base64').toString())
+    if (session.exp < Date.now()) return null
+    return session.email || null
+  } catch {
+    return null
+  }
+}
+
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies()
   const sessionCookie = cookieStore.get('session')?.value
 
   if (!sessionCookie) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const sessionEmail = getSessionEmail(sessionCookie)
+  if (!sessionEmail) {
+    return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
   }
 
   const { searchParams } = new URL(request.url)
@@ -42,22 +61,31 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const accounts = await getAllGoogleAccounts()
+    // Only get accounts owned by the logged-in user
+    const accounts = await getAllGoogleAccounts(sessionEmail)
+    console.log('calendar-events: Found', accounts.length, 'accounts for', sessionEmail)
     const allEvents: CalendarEvent[] = []
 
     for (let i = 0; i < accounts.length; i++) {
       const account = accounts[i]
+      console.log('calendar-events: Processing account', account.email)
       const accessToken = await getValidAccessTokenForAccount(account)
 
-      if (!accessToken) continue
+      if (!accessToken) {
+        console.log('calendar-events: No valid access token for', account.email)
+        continue
+      }
 
       const oauth2Client = getOAuthClient()
       oauth2Client.setCredentials({ access_token: accessToken })
 
       const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
-      const calendarIds = (account.calendar_ids as string[]) || ['primary']
+      // Default to ['primary'] if calendar_ids is null, undefined, or empty array
+      const rawCalendarIds = account.calendar_ids as string[] | null | undefined
+      const calendarIds = rawCalendarIds && rawCalendarIds.length > 0 ? rawCalendarIds : ['primary']
       const color = CALENDAR_COLORS[i % CALENDAR_COLORS.length]
 
+      console.log('calendar-events: Fetching from calendars:', calendarIds)
       for (const calendarId of calendarIds) {
         try {
           const response = await calendar.events.list({
@@ -70,6 +98,7 @@ export async function GET(request: NextRequest) {
           })
 
           const events = response.data.items || []
+          console.log(`calendar-events: Got ${events.length} events from ${calendarId}`)
 
           for (const event of events) {
             if (!event.start) continue

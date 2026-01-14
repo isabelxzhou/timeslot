@@ -159,7 +159,7 @@ export default function BookBySlugPage() {
     setPendingBooking(null)
   }
 
-  // Handle drag start
+  // Handle drag start (mouse)
   const handleDragStart = useCallback((dayIndex: number, e: React.MouseEvent) => {
     const day = weekDays[dayIndex]
     if (day < startOfDay(new Date())) return
@@ -177,7 +177,25 @@ export default function BookBySlugPage() {
     setDragCurrentY(y)
   }, [weekDays])
 
-  // Handle drag move
+  // Handle touch start (mobile)
+  const handleTouchStart = useCallback((dayIndex: number, e: React.TouchEvent) => {
+    const day = weekDays[dayIndex]
+    if (day < startOfDay(new Date())) return
+
+    const column = columnRefs.current[dayIndex]
+    if (!column) return
+
+    const touch = e.touches[0]
+    const rect = column.getBoundingClientRect()
+    const y = touch.clientY - rect.top
+
+    setIsDragging(true)
+    setDragDayIndex(dayIndex)
+    setDragStartY(y)
+    setDragCurrentY(y)
+  }, [weekDays])
+
+  // Handle drag move (mouse)
   const handleDragMove = useCallback((e: React.MouseEvent) => {
     if (!isDragging || dragDayIndex === null) return
 
@@ -186,6 +204,19 @@ export default function BookBySlugPage() {
 
     const rect = column.getBoundingClientRect()
     const y = Math.max(0, Math.min(e.clientY - rect.top, hours.length * HOUR_HEIGHT))
+    setDragCurrentY(y)
+  }, [isDragging, dragDayIndex, hours.length])
+
+  // Handle touch move (mobile)
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!isDragging || dragDayIndex === null) return
+
+    const column = columnRefs.current[dragDayIndex]
+    if (!column) return
+
+    const touch = e.touches[0]
+    const rect = column.getBoundingClientRect()
+    const y = Math.max(0, Math.min(touch.clientY - rect.top, hours.length * HOUR_HEIGHT))
     setDragCurrentY(y)
   }, [isDragging, dragDayIndex, hours.length])
 
@@ -361,55 +392,57 @@ export default function BookBySlugPage() {
       <DynamicBackground />
       {/* Header */}
       <header className="bg-zinc-950/80 backdrop-blur-md sticky top-0 z-20 border-b border-zinc-800/50">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <div className="max-w-7xl mx-auto px-2 md:px-4 py-3 md:py-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div className="flex items-center gap-3 md:gap-4">
               <Logo showText={false} href="/" />
               <div>
-                <h1 className="text-xl font-bold text-white">book with {ownerName}</h1>
-                <p className="text-sm text-zinc-400">select an available time slot</p>
+                <h1 className="text-lg md:text-xl font-bold text-white">book with {ownerName}</h1>
+                <p className="text-xs md:text-sm text-zinc-400">drag to select a time</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between md:justify-end gap-1 md:gap-2">
               <button
                 onClick={() => setCurrentWeek(startOfWeek(new Date(), { weekStartsOn: 0 }))}
-                className="px-4 py-1.5 text-sm font-medium text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
+                className="px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
               >
                 Today
               </button>
-              <button
-                onClick={() => setCurrentWeek(subWeeks(currentWeek, 1))}
-                className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <span className="text-sm font-medium text-zinc-300 min-w-[180px] text-center">
-                {format(currentWeek, 'MMM d')} - {format(addDays(currentWeek, 6), 'MMM d, yyyy')}
-              </span>
-              <button
-                onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))}
-                className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
+              <div className="flex items-center">
+                <button
+                  onClick={() => setCurrentWeek(subWeeks(currentWeek, 1))}
+                  className="p-1.5 md:p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
+                >
+                  <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <span className="text-xs md:text-sm font-medium text-zinc-300 min-w-[120px] md:min-w-[180px] text-center">
+                  {format(currentWeek, 'MMM d')} - {format(addDays(currentWeek, 6), 'MMM d')}
+                </span>
+                <button
+                  onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))}
+                  className="p-1.5 md:p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
+                >
+                  <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </header>
 
       {/* Legend */}
-      <div className="bg-zinc-900/50 backdrop-blur-sm border-b border-zinc-800/50 px-4 py-2">
-        <div className="max-w-7xl mx-auto flex items-center justify-center gap-6 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 border-2 border-dashed border-violet-400 rounded" />
+      <div className="bg-zinc-900/50 backdrop-blur-sm border-b border-zinc-800/50 px-2 md:px-4 py-2">
+        <div className="max-w-7xl mx-auto flex items-center justify-center gap-4 md:gap-6 text-xs md:text-sm">
+          <div className="flex items-center gap-1.5 md:gap-2">
+            <div className="w-3 h-3 md:w-4 md:h-4 border-2 border-dashed border-violet-400 rounded" />
             <span className="text-zinc-300">Drag to book</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-zinc-700 rounded" />
+          <div className="flex items-center gap-1.5 md:gap-2">
+            <div className="w-3 h-3 md:w-4 md:h-4 bg-zinc-700 rounded" />
             <span className="text-zinc-500">Busy</span>
           </div>
         </div>
@@ -460,27 +493,27 @@ export default function BookBySlugPage() {
       )}
 
       {/* Calendar Grid */}
-      <div className="max-w-7xl mx-auto px-2 pb-8">
+      <div className="max-w-7xl mx-auto px-1 md:px-2 pb-8">
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin h-10 w-10 border-4 border-zinc-700 border-t-violet-500 rounded-full" />
           </div>
         ) : (
-          <div className="bg-zinc-900/80 backdrop-blur-sm rounded-xl border border-zinc-800/50 mt-4 flex flex-col" style={{ height: 'calc(100vh - 200px)' }}>
+          <div className="bg-zinc-900/80 backdrop-blur-sm rounded-xl border border-zinc-800/50 mt-2 md:mt-4 flex flex-col" style={{ height: 'calc(100vh - 180px)' }}>
             {/* Day Headers */}
-            <div className="grid grid-cols-8 border-b border-zinc-800 flex-shrink-0">
-              <div className="w-16 border-r border-zinc-800" />
+            <div className="grid grid-cols-[auto_repeat(7,1fr)] md:grid-cols-8 border-b border-zinc-800 flex-shrink-0 overflow-x-auto">
+              <div className="min-w-[50px] md:min-w-[64px] border-r border-zinc-800 sticky left-0 bg-zinc-900 z-10" />
               {weekDays.map((day, i) => {
                 const isToday = isSameDay(day, new Date())
                 return (
                   <div
                     key={i}
-                    className={`py-3 text-center border-r border-zinc-800 ${isToday ? 'bg-violet-900/20' : ''}`}
+                    className={`py-2 md:py-3 text-center border-r border-zinc-800 min-w-[80px] md:min-w-0 ${isToday ? 'bg-violet-900/20' : ''}`}
                   >
-                    <div className="text-xs text-zinc-500 uppercase font-semibold tracking-wider">
+                    <div className="text-[10px] md:text-xs text-zinc-500 uppercase font-semibold tracking-wider">
                       {format(day, 'EEE')}
                     </div>
-                    <div className={`text-2xl font-bold ${isToday ? 'text-violet-400' : 'text-zinc-400'}`}>
+                    <div className={`text-lg md:text-2xl font-bold ${isToday ? 'text-violet-400' : 'text-zinc-400'}`}>
                       {format(day, 'd')}
                     </div>
                   </div>
@@ -490,16 +523,19 @@ export default function BookBySlugPage() {
 
             {/* Time Grid */}
             <div
-              className="grid grid-cols-8 overflow-y-auto calendar-grid calendar-scroll select-none flex-1"
+              className="grid grid-cols-[auto_repeat(7,1fr)] md:grid-cols-8 overflow-x-auto overflow-y-auto calendar-grid calendar-scroll select-none flex-1 touch-pan-y"
               onMouseUp={handleDragEnd}
               onMouseLeave={handleDragEnd}
               onMouseMove={handleDragMove}
+              onTouchEnd={handleDragEnd}
+              onTouchCancel={handleDragEnd}
+              onTouchMove={handleTouchMove}
             >
               {/* Time Labels */}
-              <div className="border-r border-zinc-800">
+              <div className="border-r border-zinc-800 sticky left-0 bg-zinc-900 z-10 min-w-[50px] md:min-w-[64px]">
                 {hours.map(hour => (
                   <div key={hour} className="h-[50px] border-b border-zinc-800/50 relative">
-                    <span className="absolute -top-2.5 right-2 text-xs text-zinc-600 font-medium">
+                    <span className="absolute -top-2.5 right-1 md:right-2 text-[10px] md:text-xs text-zinc-600 font-medium">
                       {format(new Date().setHours(hour, 0, 0, 0), 'h a')}
                     </span>
                   </div>
@@ -520,8 +556,9 @@ export default function BookBySlugPage() {
                   <div
                     key={dayIndex}
                     ref={el => { columnRefs.current[dayIndex] = el }}
-                    className={`border-r border-zinc-800 relative ${isToday ? 'bg-violet-900/10' : ''} ${isPast ? 'bg-zinc-900/50 cursor-not-allowed' : 'cursor-crosshair'}`}
+                    className={`border-r border-zinc-800 relative min-w-[80px] md:min-w-0 ${isToday ? 'bg-violet-900/10' : ''} ${isPast ? 'bg-zinc-900/50 cursor-not-allowed' : 'cursor-crosshair'}`}
                     onMouseDown={(e) => !isPast && handleDragStart(dayIndex, e)}
+                    onTouchStart={(e) => !isPast && handleTouchStart(dayIndex, e)}
                   >
                     {hours.map(hour => (
                       <div key={hour} className="h-[50px] border-b border-zinc-800/50" />

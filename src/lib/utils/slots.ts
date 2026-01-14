@@ -25,12 +25,19 @@ type WeeklySchedule = {
 const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
 function parseTime(dateStr: string, timeStr: string, timezone: string): Date {
+  // Parse the time string (e.g., "9:00" or "09:00")
   const [hours, minutes] = timeStr.split(':').map(Number)
-  // Create a date string in the format: "2026-01-15T09:00:00"
-  const dateTimeStr = `${dateStr}T${timeStr.padStart(5, '0')}:00`
-  // Parse it as if it's in the owner's timezone, then convert to UTC
-  const zonedDate = new Date(dateTimeStr)
-  return fromZonedTime(zonedDate, timezone)
+
+  // Create a date in the specified timezone
+  // dateStr is like "2026-01-15", we want to create "9:00 AM in America/New_York"
+  const [year, month, day] = dateStr.split('-').map(Number)
+
+  // Create a date object for this specific date/time
+  // We'll use fromZonedTime to convert from the owner's timezone to UTC
+  const dateTimeStr = `${dateStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`
+
+  // fromZonedTime: given a time that's in a specific timezone, convert to UTC
+  return fromZonedTime(dateTimeStr, timezone)
 }
 
 function isOverlapping(

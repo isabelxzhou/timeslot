@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
+// Prevent caching
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   const cookieStore = await cookies()
   const sessionCookie = cookieStore.get('session')?.value
