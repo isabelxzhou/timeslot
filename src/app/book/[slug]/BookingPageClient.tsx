@@ -364,48 +364,52 @@ export default function BookingPageClient({ slug, initialOwnerName }: BookingPag
       <DynamicBackground />
       {/* Header */}
       <header className="bg-zinc-950/80 backdrop-blur-md sticky top-0 z-20 border-b border-zinc-800/50">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
+          {/* Mobile: stacked layout, Desktop: side by side */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-3">
               <Logo showText={false} href="/" />
               <div>
-                <h1 className="text-xl font-bold text-white">book with {ownerName}</h1>
-                <p className="text-sm text-zinc-400">select an available time slot</p>
+                <h1 className="text-lg sm:text-xl font-bold text-white">book with {ownerName}</h1>
+                <p className="text-xs sm:text-sm text-zinc-400">tap or drag to select time</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            {/* Navigation controls */}
+            <div className="flex items-center justify-between sm:justify-end gap-1 sm:gap-2">
               <button
                 onClick={() => setCurrentWeek(startOfWeek(new Date(), { weekStartsOn: 0 }))}
-                className="px-4 py-1.5 text-sm font-medium text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
+                className="px-3 py-1.5 text-xs sm:text-sm font-medium text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
               >
                 Today
               </button>
-              <button
-                onClick={() => setCurrentWeek(subWeeks(currentWeek, 1))}
-                className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <span className="text-sm font-medium text-zinc-300 min-w-[180px] text-center">
-                {format(currentWeek, 'MMM d')} - {format(addDays(currentWeek, 6), 'MMM d, yyyy')}
-              </span>
-              <button
-                onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))}
-                className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
+              <div className="flex items-center">
+                <button
+                  onClick={() => setCurrentWeek(subWeeks(currentWeek, 1))}
+                  className="p-1.5 sm:p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
+                >
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <span className="text-xs sm:text-sm font-medium text-zinc-300 min-w-[120px] sm:min-w-[180px] text-center">
+                  {format(currentWeek, 'MMM d')} - {format(addDays(currentWeek, 6), 'MMM d')}
+                </span>
+                <button
+                  onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))}
+                  className="p-1.5 sm:p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
+                >
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Legend */}
-      <div className="bg-zinc-900/50 backdrop-blur-sm border-b border-zinc-800/50 px-4 py-2">
+      {/* Legend - hidden on very small screens */}
+      <div className="hidden sm:block bg-zinc-900/50 backdrop-blur-sm border-b border-zinc-800/50 px-4 py-2">
         <div className="max-w-7xl mx-auto flex items-center justify-center gap-6 text-sm">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 border-2 border-dashed border-violet-400 rounded" />
@@ -527,116 +531,149 @@ export default function BookingPageClient({ slug, initialOwnerName }: BookingPag
       )}
 
       {/* Calendar Grid */}
-      <div className="max-w-7xl mx-auto px-2 pb-8">
+      <div className="max-w-7xl mx-auto px-1 sm:px-2 pb-4 sm:pb-8">
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin h-10 w-10 border-4 border-zinc-700 border-t-violet-500 rounded-full" />
           </div>
         ) : (
-          <div className="bg-zinc-900/80 backdrop-blur-sm rounded-xl border border-zinc-800/50 mt-4 flex flex-col" style={{ height: 'calc(100vh - 200px)' }}>
-            {/* Day Headers */}
-            <div className="grid grid-cols-8 border-b border-zinc-800 flex-shrink-0">
-              <div className="w-16 border-r border-zinc-800" />
-              {weekDays.map((day, i) => {
-                const isToday = isSameDay(day, new Date())
-                return (
-                  <div
-                    key={i}
-                    className={`py-3 text-center border-r border-zinc-800 ${isToday ? 'bg-violet-900/20' : ''}`}
-                  >
-                    <div className="text-xs text-zinc-500 uppercase font-semibold tracking-wider">
-                      {format(day, 'EEE')}
-                    </div>
-                    <div className={`text-2xl font-bold ${isToday ? 'text-violet-400' : 'text-zinc-400'}`}>
-                      {format(day, 'd')}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Time Grid */}
-            <div
-              className="grid grid-cols-8 overflow-y-auto calendar-grid calendar-scroll select-none flex-1"
-              onMouseUp={handleDragEnd}
-              onMouseLeave={handleDragEnd}
-              onMouseMove={handleDragMove}
-            >
-              {/* Time Labels */}
-              <div className="border-r border-zinc-800">
-                {hours.map(hour => (
-                  <div key={hour} className="h-[50px] border-b border-zinc-800/50 relative">
-                    <span className="absolute -top-2.5 right-2 text-xs text-zinc-600 font-medium">
-                      {format(new Date().setHours(hour, 0, 0, 0), 'h a')}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Day Columns */}
-              {weekDays.map((day, dayIndex) => {
-                const dateStr = format(day, 'yyyy-MM-dd')
-                const dayData = weekSlots.find(d => d.date === dateStr)
-                const slots = dayData?.slots || []
-                const busyBlocks = mergeBusyBlocks(slots)
-                const isToday = isSameDay(day, new Date())
-                const isPast = day < startOfDay(new Date())
-                const dragStyle = getDragSelectionStyle(dayIndex)
-
-                return (
-                  <div
-                    key={dayIndex}
-                    ref={el => { columnRefs.current[dayIndex] = el }}
-                    className={`border-r border-zinc-800 relative ${isToday ? 'bg-violet-900/10' : ''} ${isPast ? 'bg-zinc-900/50 cursor-not-allowed' : 'cursor-crosshair'}`}
-                    onMouseDown={(e) => !isPast && handleDragStart(dayIndex, e)}
-                  >
-                    {hours.map(hour => (
-                      <div key={hour} className="h-[50px] border-b border-zinc-800/50" />
-                    ))}
-
-                    {dragStyle && (
+          <div className="bg-zinc-900/80 backdrop-blur-sm rounded-xl border border-zinc-800/50 mt-2 sm:mt-4 flex flex-col" style={{ height: 'calc(100vh - 140px)' }}>
+            {/* Horizontally scrollable container for mobile */}
+            <div className="overflow-x-auto flex-1 flex flex-col">
+              <div className="min-w-[600px] sm:min-w-0 flex flex-col flex-1">
+                {/* Day Headers */}
+                <div className="grid grid-cols-8 border-b border-zinc-800 flex-shrink-0">
+                  <div className="w-12 sm:w-16 border-r border-zinc-800" />
+                  {weekDays.map((day, i) => {
+                    const isToday = isSameDay(day, new Date())
+                    return (
                       <div
-                        className="absolute left-0.5 right-0.5 bg-gradient-to-r from-violet-500/50 to-fuchsia-500/50 border-2 border-violet-400 rounded-lg pointer-events-none z-20 backdrop-blur-sm"
-                        style={dragStyle}
+                        key={i}
+                        className={`py-2 sm:py-3 text-center border-r border-zinc-800 ${isToday ? 'bg-violet-900/20' : ''}`}
                       >
-                        <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-semibold drop-shadow-lg">
-                          {(() => {
-                            const minY = Math.min(dragStartY, dragCurrentY)
-                            const maxY = Math.max(dragStartY, dragCurrentY)
-                            const startMins = (minY / HOUR_HEIGHT) * 60
-                            const endMins = (maxY / HOUR_HEIGHT) * 60
-                            const startH = Math.floor(startMins / 60) + 8
-                            const startM = Math.round((startMins % 60) / 15) * 15
-                            const endH = Math.floor(endMins / 60) + 8
-                            const endM = Math.round((endMins % 60) / 15) * 15 + 30
-                            return `${startH}:${String(startM % 60).padStart(2, '0')} - ${endH}:${String(endM % 60).padStart(2, '0')}`
-                          })()}
+                        <div className="text-[10px] sm:text-xs text-zinc-500 uppercase font-semibold tracking-wider">
+                          {format(day, 'EEE')}
+                        </div>
+                        <div className={`text-lg sm:text-2xl font-bold ${isToday ? 'text-violet-400' : 'text-zinc-400'}`}>
+                          {format(day, 'd')}
                         </div>
                       </div>
-                    )}
+                    )
+                  })}
+                </div>
 
-                    {busyBlocks.filter(isSlotVisible).map((slot, i) => {
-                      const style = getSlotStyle(slot)
-                      const start = parseISO(slot.start)
-                      const end = parseISO(slot.end)
+                {/* Time Grid */}
+                <div
+                  className="grid grid-cols-8 overflow-y-auto calendar-grid calendar-scroll select-none flex-1"
+                  onMouseUp={handleDragEnd}
+                  onMouseLeave={handleDragEnd}
+                  onMouseMove={handleDragMove}
+                  onTouchEnd={handleDragEnd}
+                >
+                  {/* Time Labels */}
+                  <div className="border-r border-zinc-800 w-12 sm:w-16">
+                    {hours.map(hour => (
+                      <div key={hour} className="h-[40px] sm:h-[50px] border-b border-zinc-800/50 relative">
+                        <span className="absolute -top-2 right-1 sm:right-2 text-[10px] sm:text-xs text-zinc-600 font-medium">
+                          {format(new Date().setHours(hour, 0, 0, 0), 'ha')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
 
-                      return (
-                        <div
-                          key={i}
-                          style={style}
-                          className="absolute left-0.5 right-0.5 rounded px-1.5 py-1 text-xs overflow-hidden bg-zinc-800/90 text-zinc-500 pointer-events-none border border-zinc-700/50"
-                          title="Busy"
-                        >
-                          <div className="font-medium truncate">Busy</div>
-                          <div className="truncate opacity-70 text-[10px]">
-                            {format(start, 'h:mm a')} - {format(end, 'h:mm a')}
+                  {/* Day Columns */}
+                  {weekDays.map((day, dayIndex) => {
+                    const dateStr = format(day, 'yyyy-MM-dd')
+                    const dayData = weekSlots.find(d => d.date === dateStr)
+                    const slots = dayData?.slots || []
+                    const busyBlocks = mergeBusyBlocks(slots)
+                    const isToday = isSameDay(day, new Date())
+                    const isPast = day < startOfDay(new Date())
+                    const dragStyle = getDragSelectionStyle(dayIndex)
+
+                    // Touch handlers for mobile
+                    const handleTouchStart = (e: React.TouchEvent) => {
+                      if (isPast) return
+                      const touch = e.touches[0]
+                      const column = columnRefs.current[dayIndex]
+                      if (!column) return
+                      const rect = column.getBoundingClientRect()
+                      const y = touch.clientY - rect.top
+                      setIsDragging(true)
+                      setDragDayIndex(dayIndex)
+                      setDragStartY(y)
+                      setDragCurrentY(y)
+                    }
+
+                    const handleTouchMove = (e: React.TouchEvent) => {
+                      if (!isDragging || dragDayIndex !== dayIndex) return
+                      const touch = e.touches[0]
+                      const column = columnRefs.current[dayIndex]
+                      if (!column) return
+                      const rect = column.getBoundingClientRect()
+                      const y = Math.max(0, Math.min(touch.clientY - rect.top, hours.length * HOUR_HEIGHT))
+                      setDragCurrentY(y)
+                    }
+
+                    return (
+                      <div
+                        key={dayIndex}
+                        ref={el => { columnRefs.current[dayIndex] = el }}
+                        className={`border-r border-zinc-800 relative ${isToday ? 'bg-violet-900/10' : ''} ${isPast ? 'bg-zinc-900/50' : 'cursor-crosshair'}`}
+                        onMouseDown={(e) => !isPast && handleDragStart(dayIndex, e)}
+                        onTouchStart={handleTouchStart}
+                        onTouchMove={handleTouchMove}
+                      >
+                        {hours.map(hour => (
+                          <div key={hour} className="h-[40px] sm:h-[50px] border-b border-zinc-800/50" />
+                        ))}
+
+                        {dragStyle && (
+                          <div
+                            className="absolute left-0.5 right-0.5 bg-gradient-to-r from-violet-500/50 to-fuchsia-500/50 border-2 border-violet-400 rounded-lg pointer-events-none z-20 backdrop-blur-sm"
+                            style={dragStyle}
+                          >
+                            <div className="absolute inset-0 flex items-center justify-center text-[10px] sm:text-xs text-white font-semibold drop-shadow-lg">
+                              {(() => {
+                                const minY = Math.min(dragStartY, dragCurrentY)
+                                const maxY = Math.max(dragStartY, dragCurrentY)
+                                const hourHeight = window.innerWidth < 640 ? 40 : HOUR_HEIGHT
+                                const startMins = (minY / hourHeight) * 60
+                                const endMins = (maxY / hourHeight) * 60
+                                const startH = Math.floor(startMins / 60) + 8
+                                const startM = Math.round((startMins % 60) / 15) * 15
+                                const endH = Math.floor(endMins / 60) + 8
+                                const endM = Math.round((endMins % 60) / 15) * 15 + 30
+                                return `${startH}:${String(startM % 60).padStart(2, '0')}-${endH}:${String(endM % 60).padStart(2, '0')}`
+                              })()}
+                            </div>
                           </div>
-                        </div>
-                      )
+                        )}
+
+                        {busyBlocks.filter(isSlotVisible).map((slot, i) => {
+                          const style = getSlotStyle(slot)
+                          const start = parseISO(slot.start)
+                          const end = parseISO(slot.end)
+
+                          return (
+                            <div
+                              key={i}
+                              style={style}
+                              className="absolute left-0.5 right-0.5 rounded px-1 sm:px-1.5 py-0.5 sm:py-1 text-[10px] sm:text-xs overflow-hidden bg-zinc-800/90 text-zinc-500 pointer-events-none border border-zinc-700/50"
+                              title="Busy"
+                            >
+                              <div className="font-medium truncate">Busy</div>
+                              <div className="hidden sm:block truncate opacity-70 text-[10px]">
+                                {format(start, 'h:mm a')} - {format(end, 'h:mm a')}
+                              </div>
+                            </div>
+                          )
                     })}
                   </div>
                 )
               })}
+              </div>
+            </div>
             </div>
           </div>
         )}

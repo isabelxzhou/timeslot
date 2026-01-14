@@ -62,8 +62,8 @@ export default function BookingForm({
   }
 
   return (
-    <div className="bg-zinc-900/90 backdrop-blur-sm rounded-xl border border-zinc-800 p-6">
-      <div className="mb-6 pb-4 border-b border-zinc-800">
+    <div className="bg-zinc-900/90 backdrop-blur-sm rounded-xl border border-zinc-800 p-4 sm:p-6">
+      <div className="mb-4 sm:mb-6 pb-4 border-b border-zinc-800">
         <button
           onClick={onBack}
           className="text-sm text-zinc-400 hover:text-white flex items-center gap-1 mb-3 transition-colors"
@@ -73,9 +73,9 @@ export default function BookingForm({
           </svg>
           Back
         </button>
-        <h3 className="text-lg font-semibold text-white">Confirm Your Booking</h3>
-        <p className="text-zinc-400 mt-1">
-          {format(selectedDate, 'EEEE, MMMM d, yyyy')} at{' '}
+        <h3 className="text-base sm:text-lg font-semibold text-white">Confirm Your Booking</h3>
+        <p className="text-zinc-400 mt-1 text-sm sm:text-base">
+          {format(selectedDate, 'EEE, MMM d, yyyy')} at{' '}
           <span className="text-violet-400 font-medium">{format(new Date(selectedSlot.start), 'h:mm a')}</span>
         </p>
       </div>
