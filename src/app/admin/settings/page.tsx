@@ -435,18 +435,6 @@ export default function SettingsPage() {
             </ul>
           </div>
 
-          {/* Availability Settings */}
-          <div className="bg-zinc-900/80 backdrop-blur-sm rounded-lg border border-zinc-800 p-6">
-            <h2 className="text-lg font-semibold text-zinc-100 mb-4">Availability Schedule</h2>
-            <div className="bg-zinc-800/50 rounded-lg p-4">
-              <ul className="text-sm text-zinc-400 space-y-1">
-                <li>Monday - Friday: 9:00 AM - 5:00 PM</li>
-                <li>Saturday - Sunday: Unavailable</li>
-                <li>Slot duration: 30 minutes</li>
-                <li>Minimum notice: 1 hour</li>
-              </ul>
-            </div>
-          </div>
         </div>
       </main>
     </div>
