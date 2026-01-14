@@ -201,7 +201,7 @@ export default function SettingsPage() {
   }
 
   const getBookingUrl = () => {
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')
     return `${baseUrl}/book/${bookingSlug}`
   }
 
@@ -302,7 +302,7 @@ export default function SettingsPage() {
                 Customize your link
               </label>
               <div className="flex items-center gap-2">
-                <span className="text-zinc-500 text-sm">{typeof window !== 'undefined' ? window.location.origin : ''}/book/</span>
+                <span className="text-zinc-500 text-sm">{process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/book/</span>
                 <Input
                   type="text"
                   value={slugInput}

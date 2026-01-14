@@ -2,11 +2,26 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 
+// Helper to get email from session cookie
+async function getSessionEmail(): Promise<string | null> {
+  const cookieStore = await cookies()
+  const sessionCookie = cookieStore.get('session')?.value
+
+  if (!sessionCookie) return null
+
+  try {
+    const session = JSON.parse(Buffer.from(sessionCookie, 'base64').toString())
+    if (session.exp < Date.now()) return null
+    return session.email || null
+  } catch {
+    return null
+  }
+}
+
 // GET - Get current booking slug
 export async function GET() {
   try {
-    const cookieStore = await cookies()
-    const sessionEmail = cookieStore.get('session_email')?.value
+    const sessionEmail = await getSessionEmail()
 
     if (!sessionEmail) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
@@ -59,8 +74,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const cookieStore = await cookies()
-    const sessionEmail = cookieStore.get('session_email')?.value
+    const sessionEmail = await getSessionEmail()
 
     if (!sessionEmail) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
@@ -106,8 +120,7 @@ export async function PATCH(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const cookieStore = await cookies()
-    const sessionEmail = cookieStore.get('session_email')?.value
+    const sessionEmail = await getSessionEmail()
 
     if (!sessionEmail) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })

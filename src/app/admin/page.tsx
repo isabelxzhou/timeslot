@@ -181,11 +181,12 @@ export default function AdminPage() {
             </div>
             <div className="flex items-center gap-3">
               <code className="px-4 py-2 bg-zinc-800 rounded-lg text-zinc-300 text-sm font-mono">
-                {typeof window !== 'undefined' ? `${window.location.origin}/book` : '/book'}
+                {process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/book
               </code>
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(`${window.location.origin}/book`)
+                  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin
+                  navigator.clipboard.writeText(`${baseUrl}/book`)
                   alert('Copied!')
                 }}
                 className="px-4 py-2 bg-white text-zinc-900 font-medium rounded-lg hover:bg-zinc-200 transition-colors text-sm"
