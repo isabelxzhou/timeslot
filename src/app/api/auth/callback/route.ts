@@ -61,10 +61,12 @@ export async function GET(request: NextRequest) {
       maxAge: 60 * 60 * 24 * 7 // 7 days
     })
 
-    // Clear oauth state cookie
+    // Get redirect URL and clear oauth cookies
+    const redirectTo = cookieStore.get('oauth_redirect')?.value || '/admin'
     cookieStore.delete('oauth_state')
+    cookieStore.delete('oauth_redirect')
 
-    return NextResponse.redirect(`${baseUrl}/admin?connected=true`)
+    return NextResponse.redirect(`${baseUrl}${redirectTo}`)
   } catch (error) {
     console.error('OAuth callback error:', error)
     return NextResponse.redirect(`${baseUrl}/admin/login?error=auth_failed`)

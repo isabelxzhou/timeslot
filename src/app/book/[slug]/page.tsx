@@ -1,12 +1,11 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { format, addDays, startOfWeek, addWeeks, subWeeks, isSameDay, parseISO, differenceInMinutes, startOfDay } from 'date-fns'
 import BookingForm from '@/components/booking/BookingForm'
 import Logo from '@/components/ui/Logo'
 import DynamicBackground from '@/components/ui/DynamicBackground'
-import { Suspense } from 'react'
 
 interface TimeSlot {
   start: string
@@ -27,11 +26,9 @@ interface MergedBlock {
 
 // Merge overlapping/adjacent busy blocks only
 function mergeBusyBlocks(slots: TimeSlot[]): MergedBlock[] {
-  // Only get busy slots
   const busySlots = slots.filter(s => !s.available)
   if (busySlots.length === 0) return []
 
-  // Merge busy slots into continuous blocks
   const sortedBusy = [...busySlots].sort((a, b) =>
     new Date(a.start).getTime() - new Date(b.start).getTime()
   )
@@ -44,7 +41,6 @@ function mergeBusyBlocks(slots: TimeSlot[]): MergedBlock[] {
     const currentEnd = new Date(currentBlock.end).getTime()
     const slotStart = new Date(slot.start).getTime()
 
-    // If slots overlap or are adjacent (within 1 minute), merge them
     if (slotStart <= currentEnd + 60000) {
       const slotEnd = new Date(slot.end).getTime()
       if (slotEnd > currentEnd) {
@@ -60,7 +56,6 @@ function mergeBusyBlocks(slots: TimeSlot[]): MergedBlock[] {
   return mergedBusy
 }
 
-// Check if a time range overlaps with any busy block
 function isTimeRangeAvailable(startTime: Date, endTime: Date, busyBlocks: MergedBlock[]): boolean {
   for (const block of busyBlocks) {
     const blockStart = new Date(block.start).getTime()
@@ -68,7 +63,6 @@ function isTimeRangeAvailable(startTime: Date, endTime: Date, busyBlocks: Merged
     const selStart = startTime.getTime()
     const selEnd = endTime.getTime()
 
-    // Check for any overlap
     if (selStart < blockEnd && selEnd > blockStart) {
       return false
     }
@@ -76,17 +70,15 @@ function isTimeRangeAvailable(startTime: Date, endTime: Date, busyBlocks: Merged
   return true
 }
 
-function BookPageContent() {
+export default function BookBySlugPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const initialDate = searchParams.get('date')
+  const params = useParams()
+  const slug = params.slug as string
 
-  const [currentWeek, setCurrentWeek] = useState(() => {
-    if (initialDate) {
-      return startOfWeek(parseISO(initialDate), { weekStartsOn: 0 })
-    }
-    return startOfWeek(new Date(), { weekStartsOn: 0 })
-  })
+  const [ownerName, setOwnerName] = useState<string>('')
+  const [ownerEmail, setOwnerEmail] = useState<string>('')
+  const [notFound, setNotFound] = useState(false)
+  const [currentWeek, setCurrentWeek] = useState(() => startOfWeek(new Date(), { weekStartsOn: 0 }))
   const [weekSlots, setWeekSlots] = useState<DaySlots[]>([])
   const [selectedSlot, setSelectedSlot] = useState<{ date: string; slot: TimeSlot } | null>(null)
   const [loading, setLoading] = useState(true)
@@ -104,10 +96,31 @@ function BookPageContent() {
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeek, i))
   const hours = Array.from({ length: 16 }, (_, i) => i + 8) // 8 AM to midnight
-  const HOUR_HEIGHT = 50 // pixels per hour
+  const HOUR_HEIGHT = 50
 
-  // Fetch availability for the week
+  // Validate slug and get owner info
   useEffect(() => {
+    const validateSlug = async () => {
+      try {
+        const response = await fetch(`/api/booking-slug/lookup?slug=${slug}`)
+        if (response.ok) {
+          const data = await response.json()
+          setOwnerName(data.name || 'Meeting')
+          setOwnerEmail(data.email)
+        } else {
+          setNotFound(true)
+        }
+      } catch {
+        setNotFound(true)
+      }
+    }
+    validateSlug()
+  }, [slug])
+
+  // Fetch availability
+  useEffect(() => {
+    if (notFound || !ownerEmail) return
+
     const fetchWeekAvailability = async () => {
       setLoading(true)
       setError(null)
@@ -117,7 +130,7 @@ function BookPageContent() {
           weekDays.map(async (day) => {
             const dateStr = format(day, 'yyyy-MM-dd')
             try {
-              const response = await fetch(`/api/availability?date=${dateStr}`)
+              const response = await fetch(`/api/availability?date=${dateStr}&slug=${slug}`)
               if (response.ok) {
                 const data = await response.json()
                 return { date: dateStr, slots: data.slots || [] }
@@ -129,7 +142,7 @@ function BookPageContent() {
           })
         )
         setWeekSlots(results)
-      } catch (err) {
+      } catch {
         setError('Unable to load availability')
       } finally {
         setLoading(false)
@@ -137,13 +150,7 @@ function BookPageContent() {
     }
 
     fetchWeekAvailability()
-  }, [currentWeek])
-
-  const handleSlotClick = (date: string, slot: TimeSlot) => {
-    if (!slot.available) return
-    setSelectedSlot({ date, slot })
-    setShowForm(true)
-  }
+  }, [currentWeek, ownerEmail, slug, notFound])
 
   const handleBack = () => {
     setShowForm(false)
@@ -152,24 +159,10 @@ function BookPageContent() {
     setPendingBooking(null)
   }
 
-  // Convert Y position to time
-  const yToTime = useCallback((y: number, columnEl: HTMLElement) => {
-    const rect = columnEl.getBoundingClientRect()
-    const scrollTop = columnEl.closest('.calendar-scroll')?.scrollTop || 0
-    const relativeY = y - rect.top + scrollTop
-    const totalMinutes = (relativeY / HOUR_HEIGHT) * 60
-    const hour = Math.floor(totalMinutes / 60) + 8 // Start at 8 AM
-    const minute = Math.round((totalMinutes % 60) / 15) * 15 // Round to 15 min
-    return {
-      hour: Math.min(Math.max(hour, 8), 20),
-      minute: minute >= 60 ? 0 : minute
-    }
-  }, [])
-
   // Handle drag start
   const handleDragStart = useCallback((dayIndex: number, e: React.MouseEvent) => {
     const day = weekDays[dayIndex]
-    if (day < startOfDay(new Date())) return // Can't book in past
+    if (day < startOfDay(new Date())) return
 
     e.preventDefault()
     const column = columnRefs.current[dayIndex]
@@ -209,7 +202,6 @@ function BookPageContent() {
       return
     }
 
-    // Calculate time range
     const minY = Math.min(dragStartY, dragCurrentY)
     const maxY = Math.max(dragStartY, dragCurrentY)
 
@@ -232,12 +224,10 @@ function BookPageContent() {
     const finalEndMinute = endMinute + 30
     endTime.setHours(endHour + Math.floor(finalEndMinute / 60), finalEndMinute % 60, 0, 0)
 
-    // Ensure minimum 30 min slot
     if (endTime.getTime() - startTime.getTime() < 30 * 60 * 1000) {
       endTime.setTime(startTime.getTime() + 30 * 60 * 1000)
     }
 
-    // Clamp times to valid range (8 AM - midnight)
     const dayStart = new Date(day)
     dayStart.setHours(8, 0, 0, 0)
     const dayEnd = new Date(day)
@@ -246,7 +236,6 @@ function BookPageContent() {
     if (startTime < dayStart) startTime.setTime(dayStart.getTime())
     if (endTime > dayEnd) endTime.setTime(dayEnd.getTime())
 
-    // Check if time is available (doesn't overlap with busy blocks)
     const daySlots = weekSlots.find(d => d.date === dateStr)
     const busyBlocks = mergeBusyBlocks(daySlots?.slots || [])
     const isAvailable = isTimeRangeAvailable(startTime, endTime, busyBlocks)
@@ -260,7 +249,6 @@ function BookPageContent() {
     setDragDayIndex(null)
   }, [isDragging, dragDayIndex, dragStartY, dragCurrentY, weekDays, weekSlots])
 
-  // Confirm booking from modal
   const handleConfirmBooking = () => {
     if (!pendingBooking) return
 
@@ -276,7 +264,6 @@ function BookPageContent() {
     setShowForm(true)
   }
 
-  // Get drag selection style
   const getDragSelectionStyle = useCallback((dayIndex: number) => {
     if (!isDragging || dragDayIndex !== dayIndex) return null
 
@@ -301,7 +288,8 @@ function BookPageContent() {
           message: data.message,
           startTime: selectedSlot.slot.start,
           endTime: selectedSlot.slot.end,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          slug
         })
       })
 
@@ -317,27 +305,39 @@ function BookPageContent() {
     }
   }
 
-  // Get slot style for positioning in the grid
-  const getSlotStyle = (slot: TimeSlot) => {
+  const getSlotStyle = (slot: TimeSlot | MergedBlock) => {
     const start = parseISO(slot.start)
     const end = parseISO(slot.end)
     const dayStart = new Date(start)
-    dayStart.setHours(8, 0, 0, 0) // 8 AM start
+    dayStart.setHours(8, 0, 0, 0)
 
     const startMinutes = differenceInMinutes(start, dayStart)
     const durationMinutes = differenceInMinutes(end, start)
 
-    const top = Math.max(0, (startMinutes / 60) * 50) // 50px per hour
+    const top = Math.max(0, (startMinutes / 60) * 50)
     const height = (durationMinutes / 60) * 50
 
     return { top: `${top}px`, height: `${height}px` }
   }
 
-  // Check if slot is within visible hours (8 AM - midnight)
-  const isSlotVisible = (slot: TimeSlot) => {
+  const isSlotVisible = (slot: TimeSlot | MergedBlock) => {
     const start = parseISO(slot.start)
     const hour = start.getHours()
     return hour >= 8 && hour < 24
+  }
+
+  // Not found state
+  if (notFound) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950">
+        <DynamicBackground />
+        <div className="relative z-10 text-center">
+          <Logo size="lg" showText={false} href="/" />
+          <h1 className="text-2xl font-bold text-white mt-6">Booking Link Not Found</h1>
+          <p className="text-zinc-400 mt-2">This booking link doesn&apos;t exist or has been removed.</p>
+        </div>
+      </div>
+    )
   }
 
   if (showForm && selectedSlot) {
@@ -364,9 +364,9 @@ function BookPageContent() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Logo showText={false} href={undefined} />
+              <Logo showText={false} href="/" />
               <div>
-                <h1 className="text-xl font-bold text-white">book a meeting</h1>
+                <h1 className="text-xl font-bold text-white">book with {ownerName}</h1>
                 <p className="text-sm text-zinc-400">select an available time slot</p>
               </div>
             </div>
@@ -415,15 +415,13 @@ function BookPageContent() {
         </div>
       </div>
 
-      {/* Booking Confirmation Modal */}
+      {/* Booking Modal */}
       {showBookingModal && pendingBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowBookingModal(false)} />
           <div className="relative bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
             <h3 className="text-lg font-bold text-white mb-2">Confirm Booking</h3>
-            <p className="text-zinc-400 text-sm mb-4">
-              You selected:
-            </p>
+            <p className="text-zinc-400 text-sm mb-4">You selected:</p>
             <div className="bg-zinc-800/50 rounded-lg p-4 mb-6">
               <div className="text-white font-semibold">
                 {format(pendingBooking.startTime, 'EEEE, MMMM d')}
@@ -525,12 +523,10 @@ function BookPageContent() {
                     className={`border-r border-zinc-800 relative ${isToday ? 'bg-violet-900/10' : ''} ${isPast ? 'bg-zinc-900/50 cursor-not-allowed' : 'cursor-crosshair'}`}
                     onMouseDown={(e) => !isPast && handleDragStart(dayIndex, e)}
                   >
-                    {/* Hour lines */}
                     {hours.map(hour => (
                       <div key={hour} className="h-[50px] border-b border-zinc-800/50" />
                     ))}
 
-                    {/* Drag selection overlay */}
                     {dragStyle && (
                       <div
                         className="absolute left-0.5 right-0.5 bg-gradient-to-r from-violet-500/50 to-fuchsia-500/50 border-2 border-violet-400 rounded-lg pointer-events-none z-20 backdrop-blur-sm"
@@ -552,7 +548,6 @@ function BookPageContent() {
                       </div>
                     )}
 
-                    {/* Busy Time Blocks (only showing blocked/busy times) */}
                     {busyBlocks.filter(isSlotVisible).map((slot, i) => {
                       const style = getSlotStyle(slot)
                       const start = parseISO(slot.start)
@@ -581,17 +576,5 @@ function BookPageContent() {
       </div>
 
     </div>
-  )
-}
-
-export default function BookPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-zinc-950">
-        <div className="animate-spin h-10 w-10 border-4 border-zinc-700 border-t-violet-500 rounded-full" />
-      </div>
-    }>
-      <BookPageContent />
-    </Suspense>
   )
 }

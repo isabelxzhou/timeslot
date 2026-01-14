@@ -38,7 +38,12 @@ export async function GET(request: NextRequest) {
       .eq('status', 'confirmed')
 
     // Get ALL connected Google accounts
-    const accounts = await getAllGoogleAccounts()
+    let accounts: Awaited<ReturnType<typeof getAllGoogleAccounts>> = []
+    try {
+      accounts = await getAllGoogleAccounts()
+    } catch (error) {
+      console.log('Could not fetch google_accounts (table may not exist yet):', error)
+    }
 
     // Aggregate busy times from ALL accounts
     let allBusyTimes: { start: string; end: string }[] = []

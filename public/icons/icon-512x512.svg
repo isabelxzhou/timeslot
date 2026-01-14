@@ -1,4 +1,51 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#3b82f6"/>
-  <path d="M144 96V144M368 96V144M120 232H392M120 416H392C415.196 416 432 399.196 432 376V144C432 120.804 415.196 104 392 104H120C96.804 104 80 120.804 80 144V376C80 399.196 96.804 416 120 416Z" stroke="white" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Background for PWA -->
+  <rect width="512" height="512" rx="96" fill="#09090b"/>
+
+  <!-- 4-pointed star logo centered and scaled -->
+  <g transform="translate(106, 106) scale(3)">
+    <!-- Outer star shape -->
+    <path d="M50 0
+             Q60 40, 100 50
+             Q60 60, 50 100
+             Q40 60, 0 50
+             Q40 40, 50 0 Z"
+          fill="white"/>
+
+    <!-- Inner curved cuts - top left -->
+    <path d="M35 25
+             Q42 35, 38 45
+             Q32 42, 25 38
+             Q30 30, 35 25 Z"
+          fill="#09090b"/>
+
+    <!-- Inner curved cuts - top right -->
+    <path d="M65 25
+             Q70 30, 75 38
+             Q68 42, 62 45
+             Q58 35, 65 25 Z"
+          fill="#09090b"/>
+
+    <!-- Inner curved cuts - bottom left -->
+    <path d="M25 62
+             Q32 58, 38 55
+             Q42 65, 35 75
+             Q30 70, 25 62 Z"
+          fill="#09090b"/>
+
+    <!-- Inner curved cuts - bottom right -->
+    <path d="M62 55
+             Q68 58, 75 62
+             Q70 70, 65 75
+             Q58 65, 62 55 Z"
+          fill="#09090b"/>
+
+    <!-- Center horizontal cut -->
+    <path d="M30 48 Q40 46, 50 48 Q45 50, 40 52 Q35 50, 30 48 Z" fill="#09090b"/>
+    <path d="M50 48 Q60 46, 70 48 Q65 50, 60 52 Q55 50, 50 48 Z" fill="#09090b"/>
+
+    <!-- Center vertical cut -->
+    <path d="M48 30 Q46 40, 48 50 Q50 45, 52 40 Q50 35, 48 30 Z" fill="#09090b"/>
+    <path d="M48 50 Q46 60, 48 70 Q50 65, 52 60 Q50 55, 48 50 Z" fill="#09090b"/>
+  </g>
 </svg>

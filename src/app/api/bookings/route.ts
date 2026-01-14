@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { bookingSchema } from '@/lib/utils/validation'
+import { getPrimaryAccount, getValidAccessTokenForAccount } from '@/lib/google/accounts'
+import { createCalendarEvent } from '@/lib/google/calendar'
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,10 +17,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { guestName, guestEmail, message, startTime, endTime, timezone } = validation.data
+    const { guestName, guestEmail, meetingTitle, message, startTime, endTime, timezone } = validation.data
 
     // Use the conflict-checking function
-    const { data, error } = await supabaseAdmin.rpc('create_booking_if_available', {
+    const { data: bookingId, error } = await supabaseAdmin.rpc('create_booking_if_available', {
       p_guest_name: guestName,
       p_guest_email: guestEmail,
       p_message: message || null,
@@ -37,10 +39,40 @@ export async function POST(request: NextRequest) {
       throw error
     }
 
+    // Create Google Calendar event with invites
+    let googleEventId: string | null = null
+    const primaryAccount = await getPrimaryAccount()
+
+    if (primaryAccount) {
+      const accessToken = await getValidAccessTokenForAccount(primaryAccount)
+      if (accessToken) {
+        const eventTitle = meetingTitle || `Meeting with ${guestName}`
+        googleEventId = await createCalendarEvent({
+          accessToken,
+          summary: eventTitle,
+          description: message || `Booked via timeslot\n\nGuest: ${guestName}\nEmail: ${guestEmail}`,
+          startTime,
+          endTime,
+          attendeeEmail: guestEmail,
+          ownerEmail: primaryAccount.email,
+          timezone
+        })
+
+        // Update booking with Google event ID
+        if (googleEventId) {
+          await supabaseAdmin
+            .from('bookings')
+            .update({ google_event_id: googleEventId })
+            .eq('id', bookingId)
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      bookingId: data,
-      message: 'Booking confirmed!'
+      bookingId,
+      googleEventId,
+      message: 'Booking confirmed! Calendar invites have been sent.'
     })
   } catch (error) {
     console.error('Booking error:', error)

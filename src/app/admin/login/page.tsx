@@ -2,26 +2,28 @@
 
 import { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Logo from '@/components/ui/Logo'
+import DynamicBackground from '@/components/ui/DynamicBackground'
 
 function LoginContent() {
   const searchParams = useSearchParams()
   const error = searchParams.get('error')
+  const redirect = searchParams.get('redirect') || '/admin'
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="max-w-sm w-full">
+    <div className="min-h-screen flex items-center justify-center p-4 relative">
+      <DynamicBackground />
+      <div className="max-w-sm w-full relative z-10">
         <div className="text-center mb-8">
-          <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
+          <div className="flex justify-center mb-6">
+            <Logo size="lg" showText={false} href={undefined} />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Admin Login</h1>
-          <p className="text-gray-600 mt-1">Sign in to manage your bookings</p>
+          <h1 className="text-2xl font-bold text-white">sign in to timeslot</h1>
+          <p className="text-zinc-400 mt-1">manage your bookings and calendar</p>
         </div>
 
         {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          <div className="mb-4 p-4 bg-red-900/30 border border-red-800/50 rounded-lg text-red-400 text-sm">
             {error === 'auth_failed' && 'Authentication failed. Please try again.'}
             {error === 'invalid_state' && 'Invalid request. Please try again.'}
             {error === 'missing_params' && 'Missing parameters. Please try again.'}
@@ -30,8 +32,8 @@ function LoginContent() {
         )}
 
         <a
-          href="/api/auth/google"
-          className="flex items-center justify-center gap-3 w-full px-4 py-3 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          href={`/api/auth/google?redirect=${encodeURIComponent(redirect)}`}
+          className="flex items-center justify-center gap-3 w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg hover:bg-zinc-700 transition-colors"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -39,11 +41,11 @@ function LoginContent() {
             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
           </svg>
-          <span className="font-medium text-gray-700">Sign in with Google</span>
+          <span className="font-medium text-white">sign in with google</span>
         </a>
 
-        <p className="mt-6 text-center text-xs text-gray-500">
-          Only authorized accounts can access the admin panel.
+        <p className="mt-6 text-center text-xs text-zinc-500">
+          connect your google account to get started
         </p>
       </div>
     </div>
@@ -53,8 +55,8 @@ function LoginContent() {
 export default function AdminLoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full" />
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950">
+        <div className="animate-spin h-8 w-8 border-4 border-violet-600 border-t-transparent rounded-full" />
       </div>
     }>
       <LoginContent />

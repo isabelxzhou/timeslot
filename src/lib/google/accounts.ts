@@ -11,13 +11,29 @@ export interface GoogleAccount {
   google_token_expiry: string | null
   calendar_ids: string[]
   is_primary: boolean
+  booking_slug: string | null
+}
+
+// Generate a random booking slug
+function generateBookingSlug(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  let result = ''
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return result
 }
 
 export async function getAllGoogleAccounts(): Promise<GoogleAccount[]> {
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('google_accounts')
     .select('*')
     .order('is_primary', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching google_accounts:', error.message)
+    return []
+  }
 
   return (data || []) as GoogleAccount[]
 }
@@ -81,7 +97,7 @@ export async function addOrUpdateGoogleAccount(
   const isPrimary = !anyAccounts || anyAccounts.length === 0
 
   if (existing) {
-    await supabaseAdmin
+    const { error: updateError } = await supabaseAdmin
       .from('google_accounts')
       .update({
         name,
@@ -90,8 +106,9 @@ export async function addOrUpdateGoogleAccount(
         google_token_expiry: tokenExpiry ? new Date(tokenExpiry).toISOString() : null
       })
       .eq('id', existing.id)
+    console.log('Updated Google account:', email, 'Error:', updateError)
   } else {
-    await supabaseAdmin
+    const { error: insertError } = await supabaseAdmin
       .from('google_accounts')
       .insert({
         email,
@@ -101,6 +118,7 @@ export async function addOrUpdateGoogleAccount(
         google_token_expiry: tokenExpiry ? new Date(tokenExpiry).toISOString() : null,
         is_primary: isPrimary
       })
+    console.log('Inserted new Google account:', email, 'isPrimary:', isPrimary, 'Error:', insertError)
   }
 }
 

@@ -1,4 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180">
-  <rect width="180" height="180" rx="32" fill="#3b82f6"/>
-  <path d="M52 36V52M128 36V52M44 82H136M44 144H136C144.284 144 150 138.284 150 130V52C150 43.716 144.284 38 136 38H44C35.716 38 30 43.716 30 52V130C30 138.284 35.716 144 44 144Z" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Background for Apple touch icon -->
+  <rect width="180" height="180" rx="36" fill="#09090b"/>
+
+  <!-- Abstract geometric spiral logo - centered -->
+  <g transform="translate(30, 26)">
+    <!-- Top rectangle -->
+    <rect x="0" y="0" width="120" height="64" fill="white"/>
+
+    <!-- Outer circle ring -->
+    <circle cx="60" cy="72" r="52" fill="none" stroke="white" stroke-width="16"/>
+
+    <!-- Inner spiral -->
+    <path d="M60 72
+             Q60 46, 86 46
+             Q112 46, 112 72
+             Q112 98, 86 98
+             Q60 98, 60 72"
+          fill="white"/>
+
+    <!-- Bottom left fill -->
+    <rect x="0" y="64" width="60" height="64" fill="white"/>
+
+    <!-- Center accent -->
+    <circle cx="76" cy="72" r="16" fill="white"/>
+  </g>
 </svg>

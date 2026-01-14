@@ -3,6 +3,7 @@ import { z } from 'zod'
 export const bookingSchema = z.object({
   guestName: z.string().min(1, 'Name is required').max(255),
   guestEmail: z.string().email('Invalid email address'),
+  meetingTitle: z.string().max(100).optional(),
   message: z.string().max(1000).optional(),
   startTime: z.string().datetime(),
   endTime: z.string().datetime(),
