@@ -9,11 +9,17 @@ const SCOPES = [
   'profile'
 ]
 
-export function getOAuthClient() {
+export function getOAuthClient(customRedirectUri?: string) {
+  // In development, use localhost; in production, use the configured URI
+  const redirectUri = customRedirectUri ||
+    (process.env.NODE_ENV === 'development'
+      ? 'http://localhost:4000/api/auth/callback'
+      : process.env.GOOGLE_REDIRECT_URI)
+
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
+    redirectUri
   )
 }
 

@@ -64,55 +64,44 @@ export function generateSlots(
 ): TimeSlot[] {
   const timezone = settings.timezone || 'America/New_York'
 
-  // Parse the date string to get day of week
-  const [year, month, day] = dateStr.split('-').map(Number)
-  const dateForDayOfWeek = new Date(year, month - 1, day)
-  const dayOfWeek = DAY_NAMES[dateForDayOfWeek.getDay()]
-
-  const schedule = (settings.weekly_schedule as unknown as WeeklySchedule)?.[dayOfWeek] || []
-
-  if (!schedule || schedule.length === 0) {
-    return []
-  }
-
   const slots: TimeSlot[] = []
   const slotDuration = settings.slot_duration_minutes || 30
   const buffer = settings.buffer_minutes || 0
-  const minNoticeHours = settings.min_notice_hours || 24
 
   const now = new Date()
-  const minBookingTime = addHours(now, minNoticeHours)
 
   const confirmedBookings = existingBookings.filter(b => b.status === 'confirmed')
 
-  for (const block of schedule) {
-    let current = parseTime(dateStr, block.start, timezone)
-    const blockEnd = parseTime(dateStr, block.end, timezone)
+  // Generate slots for entire day (6 AM to 11 PM) - no schedule restrictions
+  // All times are available except for busy times from Google Calendar
+  const dayStart = '06:00'
+  const dayEnd = '23:00'
 
-    while (addMinutes(current, slotDuration) <= blockEnd) {
-      const slotEnd = addMinutes(current, slotDuration)
+  let current = parseTime(dateStr, dayStart, timezone)
+  const blockEnd = parseTime(dateStr, dayEnd, timezone)
 
-      const isInPast = isBefore(current, now)
-      const tooSoon = isBefore(current, minBookingTime)
-      const busyConflict = isOverlapping(current, slotEnd, busyTimes.map(b => ({
-        start: new Date(b.start),
-        end: new Date(b.end)
-      })))
-      const bookingConflict = isOverlapping(current, slotEnd, confirmedBookings.map(b => ({
-        start: new Date(b.start_time),
-        end: new Date(b.end_time)
-      })))
+  while (addMinutes(current, slotDuration) <= blockEnd) {
+    const slotEnd = addMinutes(current, slotDuration)
 
-      const isAvailable = !isInPast && !tooSoon && !busyConflict && !bookingConflict
+    const isInPast = isBefore(current, now)
+    const busyConflict = isOverlapping(current, slotEnd, busyTimes.map(b => ({
+      start: new Date(b.start),
+      end: new Date(b.end)
+    })))
+    const bookingConflict = isOverlapping(current, slotEnd, confirmedBookings.map(b => ({
+      start: new Date(b.start_time),
+      end: new Date(b.end_time)
+    })))
 
-      slots.push({
-        start: current,
-        end: slotEnd,
-        available: isAvailable
-      })
+    const isAvailable = !isInPast && !busyConflict && !bookingConflict
 
-      current = addMinutes(slotEnd, buffer)
-    }
+    slots.push({
+      start: current,
+      end: slotEnd,
+      available: isAvailable
+    })
+
+    current = addMinutes(slotEnd, buffer)
   }
 
   return slots
@@ -129,17 +118,11 @@ export function getAvailableDates(
   days: number
 ): Date[] {
   const dates: Date[] = []
-  const schedule = settings.weekly_schedule as unknown as WeeklySchedule
 
+  // All dates are available - no schedule restrictions
   for (let i = 0; i < days; i++) {
     const date = addHours(startOfDay(startDate), 24 * i)
-    const zonedDate = toZonedTime(date, settings.timezone || 'America/New_York')
-    const dayOfWeek = DAY_NAMES[zonedDate.getDay()]
-    const daySchedule = schedule?.[dayOfWeek] || []
-
-    if (daySchedule.length > 0) {
-      dates.push(date)
-    }
+    dates.push(date)
   }
 
   return dates

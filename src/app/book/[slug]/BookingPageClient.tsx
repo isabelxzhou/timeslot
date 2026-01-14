@@ -424,17 +424,75 @@ export default function BookingPageClient({ slug, initialOwnerName }: BookingPag
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowBookingModal(false)} />
           <div className="relative bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
             <h3 className="text-lg font-bold text-white mb-2">Confirm Booking</h3>
-            <p className="text-zinc-400 text-sm mb-4">You selected:</p>
-            <div className="bg-zinc-800/50 rounded-lg p-4 mb-6">
+            <p className="text-zinc-400 text-sm mb-4">Adjust the time if needed:</p>
+            <div className="bg-zinc-800/50 rounded-lg p-4 mb-6 space-y-4">
               <div className="text-white font-semibold">
                 {format(pendingBooking.startTime, 'EEEE, MMMM d')}
               </div>
-              <div className="text-violet-400 text-lg font-bold">
-                {format(pendingBooking.startTime, 'h:mm a')} - {format(pendingBooking.endTime, 'h:mm a')}
+
+              {/* Editable time inputs */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs text-zinc-500 mb-1">Start Time</label>
+                  <input
+                    type="time"
+                    value={format(pendingBooking.startTime, 'HH:mm')}
+                    onChange={(e) => {
+                      const [hours, minutes] = e.target.value.split(':').map(Number)
+                      const newStart = new Date(pendingBooking.startTime)
+                      newStart.setHours(hours, minutes, 0, 0)
+                      // Ensure end time is still after start time
+                      let newEnd = pendingBooking.endTime
+                      if (newEnd <= newStart) {
+                        newEnd = new Date(newStart.getTime() + 30 * 60 * 1000)
+                      }
+                      setPendingBooking({ ...pendingBooking, startTime: newStart, endTime: newEnd })
+                    }}
+                    className="w-full px-3 py-2 bg-zinc-700 border border-zinc-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  />
+                </div>
+                <span className="text-zinc-500 mt-5">to</span>
+                <div className="flex-1">
+                  <label className="block text-xs text-zinc-500 mb-1">End Time</label>
+                  <input
+                    type="time"
+                    value={format(pendingBooking.endTime, 'HH:mm')}
+                    onChange={(e) => {
+                      const [hours, minutes] = e.target.value.split(':').map(Number)
+                      const newEnd = new Date(pendingBooking.endTime)
+                      newEnd.setHours(hours, minutes, 0, 0)
+                      // Ensure end time is after start time
+                      if (newEnd > pendingBooking.startTime) {
+                        setPendingBooking({ ...pendingBooking, endTime: newEnd })
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-zinc-700 border border-zinc-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  />
+                </div>
               </div>
-              <div className="text-zinc-500 text-sm mt-1">
-                {Math.round((pendingBooking.endTime.getTime() - pendingBooking.startTime.getTime()) / 60000)} minutes
+
+              <div className="text-zinc-500 text-sm">
+                Duration: {Math.round((pendingBooking.endTime.getTime() - pendingBooking.startTime.getTime()) / 60000)} minutes
               </div>
+
+              {/* Check if selected time overlaps with busy blocks */}
+              {(() => {
+                const dateStr = pendingBooking.date
+                const daySlots = weekSlots.find(d => d.date === dateStr)
+                const busyBlocks = mergeBusyBlocks(daySlots?.slots || [])
+                const isAvailable = isTimeRangeAvailable(pendingBooking.startTime, pendingBooking.endTime, busyBlocks)
+                if (!isAvailable) {
+                  return (
+                    <div className="text-red-400 text-sm flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      This time conflicts with a busy slot
+                    </div>
+                  )
+                }
+                return null
+              })()}
             </div>
             <div className="flex gap-3">
               <button
@@ -445,7 +503,13 @@ export default function BookingPageClient({ slug, initialOwnerName }: BookingPag
               </button>
               <button
                 onClick={handleConfirmBooking}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-medium rounded-lg hover:from-violet-500 hover:to-fuchsia-500 transition-colors"
+                disabled={(() => {
+                  const dateStr = pendingBooking.date
+                  const daySlots = weekSlots.find(d => d.date === dateStr)
+                  const busyBlocks = mergeBusyBlocks(daySlots?.slots || [])
+                  return !isTimeRangeAvailable(pendingBooking.startTime, pendingBooking.endTime, busyBlocks)
+                })()}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-medium rounded-lg hover:from-violet-500 hover:to-fuchsia-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Continue
               </button>

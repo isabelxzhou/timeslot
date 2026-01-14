@@ -21,30 +21,16 @@ interface AccountsResponse {
   needsMigration?: boolean
 }
 
-interface ScheduleBlock {
-  start: string
-  end: string
+interface CalendarInfo {
+  id: string
+  summary: string
+  primary: boolean
+  selected: boolean
 }
 
-interface WeeklySchedule {
-  monday: ScheduleBlock[]
-  tuesday: ScheduleBlock[]
-  wednesday: ScheduleBlock[]
-  thursday: ScheduleBlock[]
-  friday: ScheduleBlock[]
-  saturday: ScheduleBlock[]
-  sunday: ScheduleBlock[]
-}
-
-const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const
-const DAY_LABELS: Record<string, string> = {
-  monday: 'Mon',
-  tuesday: 'Tue',
-  wednesday: 'Wed',
-  thursday: 'Thu',
-  friday: 'Fri',
-  saturday: 'Sat',
-  sunday: 'Sun'
+interface AccountCalendars {
+  accountEmail: string
+  calendars: CalendarInfo[]
 }
 
 export default function SettingsPage() {
@@ -64,18 +50,10 @@ export default function SettingsPage() {
   const [slugError, setSlugError] = useState<string | null>(null)
   const [slugSuccess, setSlugSuccess] = useState(false)
 
-  // Schedule state
-  const [schedule, setSchedule] = useState<WeeklySchedule>({
-    monday: [{ start: '09:00', end: '17:00' }],
-    tuesday: [{ start: '09:00', end: '17:00' }],
-    wednesday: [{ start: '09:00', end: '17:00' }],
-    thursday: [{ start: '09:00', end: '17:00' }],
-    friday: [{ start: '09:00', end: '17:00' }],
-    saturday: [],
-    sunday: []
-  })
-  const [scheduleSaving, setScheduleSaving] = useState(false)
-  const [scheduleSuccess, setScheduleSuccess] = useState(false)
+  // Calendar selection state
+  const [accountCalendars, setAccountCalendars] = useState<AccountCalendars[]>([])
+  const [calendarsLoading, setCalendarsLoading] = useState(false)
+  const [calendarsSaving, setCalendarsSaving] = useState<string | null>(null)
 
   useEffect(() => {
     checkAuth()
@@ -84,63 +62,57 @@ export default function SettingsPage() {
   useEffect(() => {
     if (authenticated) {
       fetchBookingSlug()
-      fetchSchedule()
+      fetchCalendars()
     }
   }, [authenticated])
 
-  const fetchSchedule = async () => {
+  const fetchCalendars = async () => {
+    setCalendarsLoading(true)
     try {
-      const response = await fetch('/api/settings')
+      const response = await fetch('/api/calendars')
       if (response.ok) {
         const data = await response.json()
-        if (data.weekly_schedule) {
-          setSchedule(data.weekly_schedule)
-        }
+        setAccountCalendars(data.accounts || [])
       }
     } catch (error) {
-      console.error('Failed to fetch schedule:', error)
+      console.error('Failed to fetch calendars:', error)
+    } finally {
+      setCalendarsLoading(false)
     }
   }
 
-  const handleScheduleChange = (day: keyof WeeklySchedule, enabled: boolean, start?: string, end?: string) => {
-    setSchedule(prev => {
-      const newSchedule = { ...prev }
-      if (enabled) {
-        newSchedule[day] = [{ start: start || '09:00', end: end || '17:00' }]
-      } else {
-        newSchedule[day] = []
+  const toggleCalendar = async (accountEmail: string, calendarId: string, selected: boolean) => {
+    // Update local state immediately
+    setAccountCalendars(prev => prev.map(acc => {
+      if (acc.accountEmail !== accountEmail) return acc
+      return {
+        ...acc,
+        calendars: acc.calendars.map(cal =>
+          cal.id === calendarId ? { ...cal, selected } : cal
+        )
       }
-      return newSchedule
-    })
-  }
+    }))
 
-  const handleTimeChange = (day: keyof WeeklySchedule, field: 'start' | 'end', value: string) => {
-    setSchedule(prev => {
-      const newSchedule = { ...prev }
-      if (newSchedule[day].length > 0) {
-        newSchedule[day] = [{ ...newSchedule[day][0], [field]: value }]
-      }
-      return newSchedule
-    })
-  }
-
-  const saveSchedule = async () => {
-    setScheduleSaving(true)
-    setScheduleSuccess(false)
+    // Save to server
+    setCalendarsSaving(accountEmail)
     try {
-      const response = await fetch('/api/settings', {
+      const account = accountCalendars.find(a => a.accountEmail === accountEmail)
+      if (!account) return
+
+      const newSelectedIds = account.calendars
+        .map(cal => cal.id === calendarId ? { ...cal, selected } : cal)
+        .filter(cal => cal.selected)
+        .map(cal => cal.id)
+
+      await fetch('/api/calendars', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ weekly_schedule: schedule })
+        body: JSON.stringify({ accountEmail, calendarIds: newSelectedIds })
       })
-      if (response.ok) {
-        setScheduleSuccess(true)
-        setTimeout(() => setScheduleSuccess(false), 3000)
-      }
     } catch (error) {
-      console.error('Failed to save schedule:', error)
+      console.error('Failed to save calendar selection:', error)
     } finally {
-      setScheduleSaving(false)
+      setCalendarsSaving(null)
     }
   }
 
@@ -508,73 +480,52 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Availability Schedule */}
+          {/* Calendar Selection */}
           <div className="bg-zinc-900/80 backdrop-blur-sm rounded-lg border border-zinc-800 p-6">
             <div className="mb-4">
-              <h2 className="text-lg font-semibold text-zinc-100">Availability Schedule</h2>
+              <h2 className="text-lg font-semibold text-zinc-100">Calendar Selection</h2>
               <p className="text-sm text-zinc-400">
-                Set your available hours for each day of the week
+                Select which calendars to check for busy times. Events on selected calendars will block booking slots.
               </p>
             </div>
 
-            <div className="space-y-3">
-              {DAYS.map(day => {
-                const daySchedule = schedule[day]
-                const isEnabled = daySchedule.length > 0
-                const startTime = daySchedule[0]?.start || '09:00'
-                const endTime = daySchedule[0]?.end || '17:00'
-
-                return (
-                  <div key={day} className="flex items-center gap-4 p-3 bg-zinc-800/50 rounded-lg">
-                    <label className="flex items-center gap-3 cursor-pointer min-w-[100px]">
-                      <input
-                        type="checkbox"
-                        checked={isEnabled}
-                        onChange={(e) => handleScheduleChange(day, e.target.checked)}
-                        className="w-4 h-4 rounded border-zinc-600 bg-zinc-700 text-violet-500 focus:ring-violet-500"
-                      />
-                      <span className={`text-sm font-medium ${isEnabled ? 'text-zinc-100' : 'text-zinc-500'}`}>
-                        {DAY_LABELS[day]}
-                      </span>
-                    </label>
-
-                    {isEnabled && (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="time"
-                          value={startTime}
-                          onChange={(e) => handleTimeChange(day, 'start', e.target.value)}
-                          className="px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-sm text-zinc-100 focus:outline-none focus:ring-1 focus:ring-violet-500"
-                        />
-                        <span className="text-zinc-500">to</span>
-                        <input
-                          type="time"
-                          value={endTime}
-                          onChange={(e) => handleTimeChange(day, 'end', e.target.value)}
-                          className="px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-sm text-zinc-100 focus:outline-none focus:ring-1 focus:ring-violet-500"
-                        />
-                      </div>
-                    )}
-
-                    {!isEnabled && (
-                      <span className="text-sm text-zinc-500">Unavailable</span>
-                    )}
+            {calendarsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin h-6 w-6 border-2 border-zinc-400 border-t-transparent rounded-full" />
+              </div>
+            ) : accountCalendars.length === 0 ? (
+              <p className="text-zinc-500 text-sm">No calendars found. Connect a Google account first.</p>
+            ) : (
+              <div className="space-y-4">
+                {accountCalendars.map(account => (
+                  <div key={account.accountEmail} className="space-y-2">
+                    <h3 className="text-sm font-medium text-zinc-300">{account.accountEmail}</h3>
+                    <div className="space-y-1 pl-2">
+                      {account.calendars.map(calendar => (
+                        <label
+                          key={calendar.id}
+                          className="flex items-center gap-3 p-2 rounded hover:bg-zinc-800/50 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={calendar.selected}
+                            onChange={(e) => toggleCalendar(account.accountEmail, calendar.id, e.target.checked)}
+                            disabled={calendarsSaving === account.accountEmail}
+                            className="w-4 h-4 rounded border-zinc-600 bg-zinc-700 text-violet-500 focus:ring-violet-500"
+                          />
+                          <span className={`text-sm ${calendar.selected ? 'text-zinc-100' : 'text-zinc-400'}`}>
+                            {calendar.summary}
+                            {calendar.primary && (
+                              <span className="ml-2 text-xs text-zinc-500">(Primary)</span>
+                            )}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                )
-              })}
-            </div>
-
-            {scheduleSuccess && (
-              <p className="mt-4 text-sm text-green-400">Schedule saved successfully!</p>
+                ))}
+              </div>
             )}
-
-            <Button
-              onClick={saveSchedule}
-              disabled={scheduleSaving}
-              className="mt-4"
-            >
-              {scheduleSaving ? 'Saving...' : 'Save Schedule'}
-            </Button>
           </div>
 
           {/* How it works */}
