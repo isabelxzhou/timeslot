@@ -7,7 +7,8 @@ export const bookingSchema = z.object({
   message: z.string().max(1000).optional(),
   startTime: z.string().datetime(),
   endTime: z.string().datetime(),
-  timezone: z.string()
+  timezone: z.string(),
+  slug: z.string().optional()
 })
 
 export type BookingInput = z.infer<typeof bookingSchema>

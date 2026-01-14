@@ -39,8 +39,21 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch booking slug' }, { status: 500 })
     }
 
-    // Generate a default slug if none exists
-    const slug = account?.booking_slug || generateSlug()
+    // If no slug exists, generate and save one
+    let slug = account?.booking_slug
+    if (!slug) {
+      slug = generateSlug()
+      // Save the generated slug to the database
+      const { error: updateError } = await supabaseAdmin
+        .from('google_accounts')
+        .update({ booking_slug: slug })
+        .eq('email', sessionEmail)
+
+      if (updateError) {
+        console.error('Error saving generated booking slug:', updateError)
+        // Still return the slug even if save fails
+      }
+    }
 
     return NextResponse.json({ slug, email: sessionEmail })
   } catch (error) {

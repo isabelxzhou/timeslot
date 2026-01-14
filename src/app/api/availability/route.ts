@@ -8,6 +8,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const dateParam = searchParams.get('date')
+  const slug = searchParams.get('slug')
 
   if (!dateParam) {
     return NextResponse.json({ error: 'Date parameter required' }, { status: 400 })
@@ -37,15 +38,29 @@ export async function GET(request: NextRequest) {
       .lt('start_time', nextDay.toISOString())
       .eq('status', 'confirmed')
 
-    // Get ALL connected Google accounts
+    // Get Google accounts - either for specific slug owner or all accounts
     let accounts: Awaited<ReturnType<typeof getAllGoogleAccounts>> = []
     try {
-      accounts = await getAllGoogleAccounts()
+      if (slug) {
+        // Look up the specific user by booking slug
+        const { data: ownerAccount } = await supabaseAdmin
+          .from('google_accounts')
+          .select('*')
+          .eq('booking_slug', slug)
+          .single()
+
+        if (ownerAccount) {
+          accounts = [ownerAccount]
+        }
+      } else {
+        // Get all connected accounts (for logged-in user's view)
+        accounts = await getAllGoogleAccounts()
+      }
     } catch (error) {
-      console.log('Could not fetch google_accounts (table may not exist yet):', error)
+      console.log('Could not fetch google_accounts:', error)
     }
 
-    // Aggregate busy times from ALL accounts
+    // Aggregate busy times from accounts
     let allBusyTimes: { start: string; end: string }[] = []
 
     for (const account of accounts) {

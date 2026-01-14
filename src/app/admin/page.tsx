@@ -42,6 +42,8 @@ export default function AdminPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [accounts, setAccounts] = useState<AccountInfo[]>([])
   const [calendarLoading, setCalendarLoading] = useState(true)
+  const [bookingSlug, setBookingSlug] = useState<string>('')
+  const [copied, setCopied] = useState(false)
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeek, i))
   const hours = Array.from({ length: 12 }, (_, i) => i + 8)
@@ -62,6 +64,7 @@ export default function AdminPage() {
       if (response.ok) {
         setAuthenticated(true)
         fetchBookings()
+        fetchBookingSlug()
       } else {
         setAuthenticated(false)
         router.push('/admin/login')
@@ -70,6 +73,29 @@ export default function AdminPage() {
       setAuthenticated(false)
       router.push('/admin/login')
     }
+  }
+
+  const fetchBookingSlug = async () => {
+    try {
+      const response = await fetch('/api/booking-slug')
+      if (response.ok) {
+        const data = await response.json()
+        setBookingSlug(data.slug || '')
+      }
+    } catch (error) {
+      console.error('Failed to fetch booking slug:', error)
+    }
+  }
+
+  const getBookingUrl = () => {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')
+    return `${baseUrl}/book/${bookingSlug}`
+  }
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(getBookingUrl())
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   const fetchBookings = async () => {
@@ -180,19 +206,21 @@ export default function AdminPage() {
               <p className="text-zinc-500 text-sm">Share this link to let people book time with you</p>
             </div>
             <div className="flex items-center gap-3">
-              <code className="px-4 py-2 bg-zinc-800 rounded-lg text-zinc-300 text-sm font-mono">
-                {process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/book
-              </code>
-              <button
-                onClick={() => {
-                  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin
-                  navigator.clipboard.writeText(`${baseUrl}/book`)
-                  alert('Copied!')
-                }}
-                className="px-4 py-2 bg-white text-zinc-900 font-medium rounded-lg hover:bg-zinc-200 transition-colors text-sm"
-              >
-                Copy
-              </button>
+              {bookingSlug ? (
+                <>
+                  <code className="px-4 py-2 bg-zinc-800 rounded-lg text-zinc-300 text-sm font-mono">
+                    {getBookingUrl()}
+                  </code>
+                  <button
+                    onClick={handleCopyLink}
+                    className="px-4 py-2 bg-white text-zinc-900 font-medium rounded-lg hover:bg-zinc-200 transition-colors text-sm"
+                  >
+                    {copied ? 'Copied!' : 'Copy'}
+                  </button>
+                </>
+              ) : (
+                <span className="text-zinc-500 text-sm">Loading...</span>
+              )}
             </div>
           </div>
         </div>

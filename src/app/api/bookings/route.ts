@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { guestName, guestEmail, meetingTitle, message, startTime, endTime, timezone } = validation.data
+    const { guestName, guestEmail, meetingTitle, message, startTime, endTime, timezone, slug } = validation.data
 
     // Use the conflict-checking function
     const { data: bookingId, error } = await supabaseAdmin.rpc('create_booking_if_available', {
@@ -41,10 +41,22 @@ export async function POST(request: NextRequest) {
 
     // Create Google Calendar event with invites
     let googleEventId: string | null = null
-    const primaryAccount = await getPrimaryAccount()
+    let ownerAccount = null
 
-    if (primaryAccount) {
-      const accessToken = await getValidAccessTokenForAccount(primaryAccount)
+    // If slug is provided, look up the account by slug, otherwise use primary account
+    if (slug) {
+      const { data: slugAccount } = await supabaseAdmin
+        .from('google_accounts')
+        .select('*')
+        .eq('booking_slug', slug)
+        .single()
+      ownerAccount = slugAccount
+    } else {
+      ownerAccount = await getPrimaryAccount()
+    }
+
+    if (ownerAccount) {
+      const accessToken = await getValidAccessTokenForAccount(ownerAccount)
       if (accessToken) {
         const eventTitle = meetingTitle || `Meeting with ${guestName}`
         googleEventId = await createCalendarEvent({
@@ -54,7 +66,7 @@ export async function POST(request: NextRequest) {
           startTime,
           endTime,
           attendeeEmail: guestEmail,
-          ownerEmail: primaryAccount.email,
+          ownerEmail: ownerAccount.email,
           timezone
         })
 
