@@ -156,7 +156,8 @@ export async function GET(request: NextRequest) {
       slots: slots.map(slot => ({
         start: slot.start.toISOString(),
         end: slot.end.toISOString(),
-        available: slot.available
+        available: slot.available,
+        busy: slot.busy
       }))
     })
   } catch (error) {

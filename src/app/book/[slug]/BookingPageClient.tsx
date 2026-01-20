@@ -439,11 +439,12 @@ export default function BookingPageClient({ slug, initialOwnerName }: BookingPag
               {/* Editable time inputs */}
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="flex-1">
-                  <label className="block text-[10px] sm:text-xs text-zinc-500 mb-1">Start Time</label>
+                  <label className="block text-[10px] sm:text-xs text-zinc-400 mb-1.5 font-medium">Start Time</label>
                   <input
                     type="time"
                     value={format(pendingBooking.startTime, 'HH:mm')}
                     onChange={(e) => {
+                      if (!e.target.value) return
                       const [hours, minutes] = e.target.value.split(':').map(Number)
                       const newStart = new Date(pendingBooking.startTime)
                       newStart.setHours(hours, minutes, 0, 0)
@@ -454,16 +455,17 @@ export default function BookingPageClient({ slug, initialOwnerName }: BookingPag
                       }
                       setPendingBooking({ ...pendingBooking, startTime: newStart, endTime: newEnd })
                     }}
-                    className="w-full px-2 sm:px-3 py-2 sm:py-3 bg-zinc-700 border border-zinc-600 rounded-lg text-white text-base sm:text-lg font-medium focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer"
+                    className="w-full px-3 py-2.5 bg-zinc-700 border-2 border-violet-500/50 rounded-lg text-white text-base font-semibold text-center cursor-text hover:border-violet-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-500/30 transition-all [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-60 [&::-webkit-calendar-picker-indicator]:hover:opacity-100"
                   />
                 </div>
-                <span className="text-zinc-500 mt-5 text-sm">to</span>
+                <span className="text-zinc-400 mt-6 text-sm font-medium">to</span>
                 <div className="flex-1">
-                  <label className="block text-[10px] sm:text-xs text-zinc-500 mb-1">End Time</label>
+                  <label className="block text-[10px] sm:text-xs text-zinc-400 mb-1.5 font-medium">End Time</label>
                   <input
                     type="time"
                     value={format(pendingBooking.endTime, 'HH:mm')}
                     onChange={(e) => {
+                      if (!e.target.value) return
                       const [hours, minutes] = e.target.value.split(':').map(Number)
                       const newEnd = new Date(pendingBooking.endTime)
                       newEnd.setHours(hours, minutes, 0, 0)
@@ -472,7 +474,7 @@ export default function BookingPageClient({ slug, initialOwnerName }: BookingPag
                         setPendingBooking({ ...pendingBooking, endTime: newEnd })
                       }
                     }}
-                    className="w-full px-2 sm:px-3 py-2 sm:py-3 bg-zinc-700 border border-zinc-600 rounded-lg text-white text-base sm:text-lg font-medium focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer"
+                    className="w-full px-3 py-2.5 bg-zinc-700 border-2 border-violet-500/50 rounded-lg text-white text-base font-semibold text-center cursor-text hover:border-violet-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-500/30 transition-all [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-60 [&::-webkit-calendar-picker-indicator]:hover:opacity-100"
                   />
                 </div>
               </div>
