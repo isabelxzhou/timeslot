@@ -11,6 +11,7 @@ interface TimeSlot {
   start: string
   end: string
   available: boolean
+  busy?: boolean // true if blocked by Google Calendar event
 }
 
 interface DaySlots {
@@ -21,12 +22,13 @@ interface DaySlots {
 interface MergedBlock {
   start: string
   end: string
-  available: boolean
+  busy: boolean
 }
 
-// Merge overlapping/adjacent busy blocks only
+// Merge overlapping/adjacent busy blocks only (actual calendar events, not just past times)
 function mergeBusyBlocks(slots: TimeSlot[]): MergedBlock[] {
-  const busySlots = slots.filter(s => !s.available)
+  // Filter for slots that are actually busy from calendar (not just past)
+  const busySlots = slots.filter(s => s.busy === true)
   if (busySlots.length === 0) return []
 
   const sortedBusy = [...busySlots].sort((a, b) =>
@@ -34,7 +36,7 @@ function mergeBusyBlocks(slots: TimeSlot[]): MergedBlock[] {
   )
 
   const mergedBusy: MergedBlock[] = []
-  let currentBlock = { ...sortedBusy[0], available: false }
+  let currentBlock = { start: sortedBusy[0].start, end: sortedBusy[0].end, busy: true }
 
   for (let i = 1; i < sortedBusy.length; i++) {
     const slot = sortedBusy[i]
@@ -48,7 +50,7 @@ function mergeBusyBlocks(slots: TimeSlot[]): MergedBlock[] {
       }
     } else {
       mergedBusy.push(currentBlock)
-      currentBlock = { ...slot, available: false }
+      currentBlock = { start: slot.start, end: slot.end, busy: true }
     }
   }
   mergedBusy.push(currentBlock)
@@ -424,20 +426,20 @@ export default function BookingPageClient({ slug, initialOwnerName }: BookingPag
 
       {/* Booking Modal */}
       {showBookingModal && pendingBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowBookingModal(false)} />
-          <div className="relative bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-2">Confirm Booking</h3>
-            <p className="text-zinc-400 text-sm mb-4">Adjust the time if needed:</p>
-            <div className="bg-zinc-800/50 rounded-lg p-4 mb-6 space-y-4">
-              <div className="text-white font-semibold">
+          <div className="relative bg-zinc-900 border border-zinc-700 rounded-2xl p-4 sm:p-6 max-w-sm w-full shadow-2xl">
+            <h3 className="text-base sm:text-lg font-bold text-white mb-1 sm:mb-2">Confirm Booking</h3>
+            <p className="text-zinc-400 text-xs sm:text-sm mb-3 sm:mb-4">Tap times below to adjust:</p>
+            <div className="bg-zinc-800/50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 space-y-3 sm:space-y-4">
+              <div className="text-white font-semibold text-sm sm:text-base">
                 {format(pendingBooking.startTime, 'EEEE, MMMM d')}
               </div>
 
               {/* Editable time inputs */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <div className="flex-1">
-                  <label className="block text-xs text-zinc-500 mb-1">Start Time</label>
+                  <label className="block text-[10px] sm:text-xs text-zinc-500 mb-1">Start Time</label>
                   <input
                     type="time"
                     value={format(pendingBooking.startTime, 'HH:mm')}
@@ -452,12 +454,12 @@ export default function BookingPageClient({ slug, initialOwnerName }: BookingPag
                       }
                       setPendingBooking({ ...pendingBooking, startTime: newStart, endTime: newEnd })
                     }}
-                    className="w-full px-3 py-2 bg-zinc-700 border border-zinc-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    className="w-full px-2 sm:px-3 py-2 sm:py-3 bg-zinc-700 border border-zinc-600 rounded-lg text-white text-base sm:text-lg font-medium focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer"
                   />
                 </div>
-                <span className="text-zinc-500 mt-5">to</span>
+                <span className="text-zinc-500 mt-5 text-sm">to</span>
                 <div className="flex-1">
-                  <label className="block text-xs text-zinc-500 mb-1">End Time</label>
+                  <label className="block text-[10px] sm:text-xs text-zinc-500 mb-1">End Time</label>
                   <input
                     type="time"
                     value={format(pendingBooking.endTime, 'HH:mm')}
@@ -470,13 +472,13 @@ export default function BookingPageClient({ slug, initialOwnerName }: BookingPag
                         setPendingBooking({ ...pendingBooking, endTime: newEnd })
                       }
                     }}
-                    className="w-full px-3 py-2 bg-zinc-700 border border-zinc-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    className="w-full px-2 sm:px-3 py-2 sm:py-3 bg-zinc-700 border border-zinc-600 rounded-lg text-white text-base sm:text-lg font-medium focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer"
                   />
                 </div>
               </div>
 
-              <div className="text-zinc-500 text-sm">
-                Duration: {Math.round((pendingBooking.endTime.getTime() - pendingBooking.startTime.getTime()) / 60000)} minutes
+              <div className="text-zinc-400 text-xs sm:text-sm text-center">
+                {Math.round((pendingBooking.endTime.getTime() - pendingBooking.startTime.getTime()) / 60000)} min meeting
               </div>
 
               {/* Check if selected time overlaps with busy blocks */}
@@ -498,10 +500,10 @@ export default function BookingPageClient({ slug, initialOwnerName }: BookingPag
                 return null
               })()}
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-2 sm:gap-3">
               <button
                 onClick={() => setShowBookingModal(false)}
-                className="flex-1 px-4 py-2 text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
+                className="flex-1 px-3 sm:px-4 py-2.5 sm:py-2 text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors text-sm sm:text-base"
               >
                 Cancel
               </button>
@@ -513,7 +515,7 @@ export default function BookingPageClient({ slug, initialOwnerName }: BookingPag
                   const busyBlocks = mergeBusyBlocks(daySlots?.slots || [])
                   return !isTimeRangeAvailable(pendingBooking.startTime, pendingBooking.endTime, busyBlocks)
                 })()}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-medium rounded-lg hover:from-violet-500 hover:to-fuchsia-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-3 sm:px-4 py-2.5 sm:py-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-medium rounded-lg hover:from-violet-500 hover:to-fuchsia-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
               >
                 Continue
               </button>

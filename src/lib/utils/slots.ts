@@ -6,6 +6,7 @@ export interface TimeSlot {
   start: Date
   end: Date
   available: boolean
+  busy: boolean // true if blocked by Google Calendar event
 }
 
 interface BusyTime {
@@ -93,12 +94,15 @@ export function generateSlots(
       end: new Date(b.end_time)
     })))
 
-    const isAvailable = !isInPast && !busyConflict && !bookingConflict
+    // Track if slot is busy from calendar (separate from just being in the past)
+    const isBusy = busyConflict || bookingConflict
+    const isAvailable = !isInPast && !isBusy
 
     slots.push({
       start: current,
       end: slotEnd,
-      available: isAvailable
+      available: isAvailable,
+      busy: isBusy
     })
 
     current = addMinutes(slotEnd, buffer)
