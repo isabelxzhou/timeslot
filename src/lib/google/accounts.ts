@@ -199,6 +199,40 @@ export async function addOrUpdateGoogleAccount(
     }
     console.log('Inserted new Google account:', email, 'isPrimary:', isPrimary, 'Error:', insertError?.message || 'none')
   }
+
+  // Ensure owner_settings exists for this owner (create with defaults on first login)
+  const { data: existingSettings } = await supabaseAdmin
+    .from('owner_settings')
+    .select('id')
+    .eq('email', effectiveOwner)
+    .single()
+
+  if (!existingSettings) {
+    const defaultSchedule = {
+      monday: [{ start: '09:00', end: '17:00' }],
+      tuesday: [{ start: '09:00', end: '17:00' }],
+      wednesday: [{ start: '09:00', end: '17:00' }],
+      thursday: [{ start: '09:00', end: '17:00' }],
+      friday: [{ start: '09:00', end: '17:00' }],
+      saturday: [],
+      sunday: []
+    }
+
+    const { error: settingsError } = await supabaseAdmin
+      .from('owner_settings')
+      .insert({
+        email: effectiveOwner,
+        name: name || effectiveOwner.split('@')[0],
+        weekly_schedule: defaultSchedule,
+        timezone: 'America/New_York',
+        slot_duration_minutes: 30,
+        buffer_minutes: 0,
+        min_notice_hours: 24,
+        booking_window_days: 30
+      })
+
+    console.log('Created owner_settings for:', effectiveOwner, 'Error:', settingsError?.message || 'none')
+  }
 }
 
 export async function removeGoogleAccount(email: string): Promise<void> {
