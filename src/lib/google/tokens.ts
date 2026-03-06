@@ -1,13 +1,12 @@
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { sql } from '@/lib/db'
 import { refreshAccessToken } from './oauth'
 import { encrypt, decrypt } from '@/lib/utils/encryption'
 
 export async function getValidAccessToken(): Promise<string | null> {
-  const { data: settings } = await supabaseAdmin
-    .from('owner_settings')
-    .select('*')
-    .limit(1)
-    .single()
+  const rows = await sql`
+    SELECT * FROM owner_settings LIMIT 1
+  `
+  const settings = rows[0]
 
   if (!settings?.google_access_token || !settings?.google_refresh_token) {
     return null
@@ -25,15 +24,16 @@ export async function getValidAccessToken(): Promise<string | null> {
       const credentials = await refreshAccessToken(decryptedRefreshToken)
 
       if (credentials.access_token) {
-        await supabaseAdmin
-          .from('owner_settings')
-          .update({
-            google_access_token: encrypt(credentials.access_token),
-            google_token_expiry: credentials.expiry_date
-              ? new Date(credentials.expiry_date).toISOString()
-              : null
-          })
-          .eq('id', settings.id)
+        const newExpiry = credentials.expiry_date
+          ? new Date(credentials.expiry_date).toISOString()
+          : null
+
+        await sql`
+          UPDATE owner_settings
+          SET google_access_token = ${encrypt(credentials.access_token)},
+              google_token_expiry = ${newExpiry}
+          WHERE id = ${settings.id}
+        `
 
         return credentials.access_token
       }
@@ -47,11 +47,8 @@ export async function getValidAccessToken(): Promise<string | null> {
 }
 
 export async function getOwnerSettings() {
-  const { data: settings } = await supabaseAdmin
-    .from('owner_settings')
-    .select('*')
-    .limit(1)
-    .single()
-
-  return settings
+  const rows = await sql`
+    SELECT * FROM owner_settings LIMIT 1
+  `
+  return rows[0] || null
 }

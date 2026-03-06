@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { sql } from '@/lib/db'
 import { refreshAccessToken } from './oauth'
 import { encrypt, decrypt } from '@/lib/utils/encryption'
 
@@ -26,29 +26,20 @@ function generateBookingSlug(): string {
 }
 
 export async function getAllGoogleAccounts(ownerEmail?: string): Promise<GoogleAccount[]> {
-  // First, try to fetch all accounts and filter in code (more resilient to missing columns)
-  const { data: allData, error } = await supabaseAdmin
-    .from('google_accounts')
-    .select('*')
-    .order('is_primary', { ascending: false })
+  const rows = await sql`
+    SELECT * FROM google_accounts ORDER BY is_primary DESC
+  `
 
-  if (error) {
-    console.error('Error fetching google_accounts:', error.message)
-    return []
-  }
-
-  const allAccounts = (allData || []) as GoogleAccount[]
+  const allAccounts = rows as GoogleAccount[]
 
   console.log('getAllGoogleAccounts called with ownerEmail:', ownerEmail)
   console.log('Total accounts in DB:', allAccounts.length)
 
-  // If no ownerEmail filter, return all (should rarely happen in production)
   if (!ownerEmail) {
     console.log('No ownerEmail filter, returning all accounts')
     return allAccounts
   }
 
-  // Filter accounts - ONLY show accounts where owner_email matches exactly
   const filtered = allAccounts.filter(account => {
     const match = account.owner_email === ownerEmail
     console.log(`  ${account.email}: owner_email="${account.owner_email}" ${match ? 'MATCH' : 'NO MATCH'}`)
@@ -76,15 +67,16 @@ export async function getValidAccessTokenForAccount(account: GoogleAccount): Pro
       const credentials = await refreshAccessToken(decryptedRefreshToken)
 
       if (credentials.access_token) {
-        await supabaseAdmin
-          .from('google_accounts')
-          .update({
-            google_access_token: encrypt(credentials.access_token),
-            google_token_expiry: credentials.expiry_date
-              ? new Date(credentials.expiry_date).toISOString()
-              : null
-          })
-          .eq('id', account.id)
+        const newExpiry = credentials.expiry_date
+          ? new Date(credentials.expiry_date).toISOString()
+          : null
+
+        await sql`
+          UPDATE google_accounts
+          SET google_access_token = ${encrypt(credentials.access_token)},
+              google_token_expiry = ${newExpiry}
+          WHERE id = ${account.id}
+        `
 
         return credentials.access_token
       }
@@ -105,109 +97,73 @@ export async function addOrUpdateGoogleAccount(
   tokenExpiry: number | null,
   ownerEmail?: string // The user who owns this account
 ): Promise<void> {
-  // If no ownerEmail provided, the account owns itself (initial login)
   const effectiveOwner = ownerEmail || email
 
   console.log('addOrUpdateGoogleAccount:', { email, ownerEmail, effectiveOwner })
 
-  const { data: existing } = await supabaseAdmin
-    .from('google_accounts')
-    .select('id')
-    .eq('email', email)
-    .single()
+  const existing = await sql`
+    SELECT id FROM google_accounts WHERE email = ${email} LIMIT 1
+  `
 
-  // Check if this owner already has any accounts with proper owner_email
-  const { data: userAccounts } = await supabaseAdmin
-    .from('google_accounts')
-    .select('id')
-    .eq('owner_email', effectiveOwner)
+  const userAccounts = await sql`
+    SELECT id FROM google_accounts WHERE owner_email = ${effectiveOwner}
+  `
 
-  // This should be primary if the owner has no other accounts
-  const isPrimary = !userAccounts || userAccounts.length === 0
+  const isPrimary = userAccounts.length === 0
 
-  // Base data without owner_email (in case column doesn't exist)
-  const baseData = {
-    name,
-    google_access_token: encrypt(accessToken),
-    google_refresh_token: refreshToken ? encrypt(refreshToken) : null,
-    google_token_expiry: tokenExpiry ? new Date(tokenExpiry).toISOString() : null,
-  }
+  const encryptedAccessToken = encrypt(accessToken)
+  const encryptedRefreshToken = refreshToken ? encrypt(refreshToken) : null
+  const expiryIso = tokenExpiry ? new Date(tokenExpiry).toISOString() : null
 
-  if (existing) {
-    // Check if calendar_ids needs to be set (if empty or null)
-    const { data: existingFull } = await supabaseAdmin
-      .from('google_accounts')
-      .select('calendar_ids')
-      .eq('id', existing.id)
-      .single()
+  if (existing.length > 0) {
+    const existingId = existing[0].id
 
-    const needsCalendarIds = !existingFull?.calendar_ids ||
-      (Array.isArray(existingFull.calendar_ids) && existingFull.calendar_ids.length === 0)
+    const existingFull = await sql`
+      SELECT calendar_ids FROM google_accounts WHERE id = ${existingId} LIMIT 1
+    `
 
-    // Build update data - always update owner_email and is_primary for fresh logins
-    const updateData: Record<string, unknown> = {
-      ...baseData,
-      owner_email: effectiveOwner,
-      is_primary: isPrimary, // Set primary if this user has no other accounts
-    }
+    const needsCalendarIds = !existingFull[0]?.calendar_ids ||
+      (Array.isArray(existingFull[0].calendar_ids) && existingFull[0].calendar_ids.length === 0)
+
     if (needsCalendarIds) {
-      updateData.calendar_ids = ['primary']
+      await sql`
+        UPDATE google_accounts
+        SET name = ${name},
+            google_access_token = ${encryptedAccessToken},
+            google_refresh_token = ${encryptedRefreshToken},
+            google_token_expiry = ${expiryIso},
+            owner_email = ${effectiveOwner},
+            is_primary = ${isPrimary},
+            calendar_ids = ${JSON.stringify(['primary'])}::jsonb
+        WHERE id = ${existingId}
+      `
+    } else {
+      await sql`
+        UPDATE google_accounts
+        SET name = ${name},
+            google_access_token = ${encryptedAccessToken},
+            google_refresh_token = ${encryptedRefreshToken},
+            google_token_expiry = ${expiryIso},
+            owner_email = ${effectiveOwner},
+            is_primary = ${isPrimary}
+        WHERE id = ${existingId}
+      `
     }
-
-    let { error: updateError } = await supabaseAdmin
-      .from('google_accounts')
-      .update(updateData)
-      .eq('id', existing.id)
-
-    // If owner_email column doesn't exist, try without it
-    if (updateError?.message?.includes('owner_email')) {
-      const fallbackData: Record<string, unknown> = { ...baseData, is_primary: isPrimary }
-      if (needsCalendarIds) {
-        fallbackData.calendar_ids = ['primary']
-      }
-      const result = await supabaseAdmin
-        .from('google_accounts')
-        .update(fallbackData)
-        .eq('id', existing.id)
-      updateError = result.error
-    }
-    console.log('Updated Google account:', email, 'owner_email set to:', effectiveOwner, 'Error:', updateError?.message || 'none')
+    console.log('Updated Google account:', email, 'owner_email set to:', effectiveOwner)
   } else {
-    // Try insert with owner_email first, fall back without
-    // Always set calendar_ids to ['primary'] for new accounts
-    let { error: insertError } = await supabaseAdmin
-      .from('google_accounts')
-      .insert({
-        email,
-        ...baseData,
-        is_primary: isPrimary,
-        owner_email: effectiveOwner,
-        calendar_ids: ['primary']
-      })
-
-    // If owner_email column doesn't exist, try without it
-    if (insertError?.message?.includes('owner_email')) {
-      const result = await supabaseAdmin
-        .from('google_accounts')
-        .insert({
-          email,
-          ...baseData,
-          is_primary: isPrimary,
-          calendar_ids: ['primary']
-        })
-      insertError = result.error
-    }
-    console.log('Inserted new Google account:', email, 'isPrimary:', isPrimary, 'Error:', insertError?.message || 'none')
+    await sql`
+      INSERT INTO google_accounts (email, name, google_access_token, google_refresh_token, google_token_expiry, is_primary, owner_email, calendar_ids)
+      VALUES (${email}, ${name}, ${encryptedAccessToken}, ${encryptedRefreshToken}, ${expiryIso}, ${isPrimary}, ${effectiveOwner}, '["primary"]'::jsonb)
+    `
+    console.log('Inserted new Google account:', email, 'isPrimary:', isPrimary)
   }
 
-  // Ensure owner_settings exists for this owner (create with defaults on first login)
-  const { data: existingSettings } = await supabaseAdmin
-    .from('owner_settings')
-    .select('id')
-    .eq('email', effectiveOwner)
-    .single()
+  // Ensure owner_settings exists for this owner
+  const existingSettings = await sql`
+    SELECT id FROM owner_settings WHERE email = ${effectiveOwner} LIMIT 1
+  `
 
-  if (!existingSettings) {
+  if (existingSettings.length === 0) {
     const defaultSchedule = {
       monday: [{ start: '09:00', end: '17:00' }],
       tuesday: [{ start: '09:00', end: '17:00' }],
@@ -218,38 +174,24 @@ export async function addOrUpdateGoogleAccount(
       sunday: []
     }
 
-    const { error: settingsError } = await supabaseAdmin
-      .from('owner_settings')
-      .insert({
-        email: effectiveOwner,
-        name: name || effectiveOwner.split('@')[0],
-        weekly_schedule: defaultSchedule,
-        timezone: 'America/New_York',
-        slot_duration_minutes: 30,
-        buffer_minutes: 0,
-        min_notice_hours: 24,
-        booking_window_days: 30
-      })
-
-    console.log('Created owner_settings for:', effectiveOwner, 'Error:', settingsError?.message || 'none')
+    await sql`
+      INSERT INTO owner_settings (email, name, weekly_schedule, timezone, slot_duration_minutes, buffer_minutes, min_notice_hours, booking_window_days)
+      VALUES (${effectiveOwner}, ${name || effectiveOwner.split('@')[0]}, ${JSON.stringify(defaultSchedule)}::jsonb, 'America/New_York', 30, 0, 24, 30)
+    `
+    console.log('Created owner_settings for:', effectiveOwner)
   }
 }
 
 export async function removeGoogleAccount(email: string): Promise<void> {
-  await supabaseAdmin
-    .from('google_accounts')
-    .delete()
-    .eq('email', email)
+  await sql`DELETE FROM google_accounts WHERE email = ${email}`
 }
 
 export async function getPrimaryAccount(ownerEmail?: string): Promise<GoogleAccount | null> {
-  // Fetch all primary accounts and filter in code (resilient to missing owner_email column)
-  const { data: allPrimary, error } = await supabaseAdmin
-    .from('google_accounts')
-    .select('*')
-    .eq('is_primary', true)
+  const allPrimary = await sql`
+    SELECT * FROM google_accounts WHERE is_primary = true
+  `
 
-  if (error || !allPrimary || allPrimary.length === 0) {
+  if (allPrimary.length === 0) {
     return null
   }
 
@@ -257,7 +199,6 @@ export async function getPrimaryAccount(ownerEmail?: string): Promise<GoogleAcco
     return allPrimary[0] as GoogleAccount
   }
 
-  // Filter to find primary account for this owner
   const account = allPrimary.find(a => {
     if (a.owner_email === ownerEmail) return true
     if (!a.owner_email && a.email === ownerEmail) return true

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { sql } from '@/lib/db'
 
 // Helper to get email from session cookie
 async function getSessionEmail(): Promise<string | null> {
@@ -27,32 +27,17 @@ export async function GET() {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    // First try google_accounts table
-    const { data: account, error } = await supabaseAdmin
-      .from('google_accounts')
-      .select('booking_slug')
-      .eq('email', sessionEmail)
-      .single()
+    const rows = await sql`
+      SELECT booking_slug FROM google_accounts WHERE email = ${sessionEmail} LIMIT 1
+    `
+    const account = rows[0]
 
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching booking slug:', error)
-      return NextResponse.json({ error: 'Failed to fetch booking slug' }, { status: 500 })
-    }
-
-    // If no slug exists, generate and save one
     let slug = account?.booking_slug
     if (!slug) {
       slug = generateSlug()
-      // Save the generated slug to the database
-      const { error: updateError } = await supabaseAdmin
-        .from('google_accounts')
-        .update({ booking_slug: slug })
-        .eq('email', sessionEmail)
-
-      if (updateError) {
-        console.error('Error saving generated booking slug:', updateError)
-        // Still return the slug even if save fails
-      }
+      await sql`
+        UPDATE google_accounts SET booking_slug = ${slug} WHERE email = ${sessionEmail}
+      `
     }
 
     return NextResponse.json({ slug, email: sessionEmail })
@@ -71,7 +56,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Slug is required' }, { status: 400 })
     }
 
-    // Validate slug format
     const slugRegex = /^[a-z0-9-]+$/
     if (!slugRegex.test(slug)) {
       return NextResponse.json({
@@ -93,14 +77,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    // Check if slug is taken by someone else
-    const { data: existingAccount } = await supabaseAdmin
-      .from('google_accounts')
-      .select('email')
-      .eq('booking_slug', slug)
-      .single()
+    const rows = await sql`
+      SELECT email FROM google_accounts WHERE booking_slug = ${slug} LIMIT 1
+    `
+    const existingAccount = rows[0]
 
-    // Slug is available if no one has it, or if current user owns it
     const isAvailable = !existingAccount || existingAccount.email === sessionEmail
 
     return NextResponse.json({ available: isAvailable })
@@ -119,7 +100,6 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Slug is required' }, { status: 400 })
     }
 
-    // Validate slug format
     const slugRegex = /^[a-z0-9-]+$/
     if (!slugRegex.test(slug)) {
       return NextResponse.json({
@@ -139,12 +119,10 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    // Check if slug is taken by someone else
-    const { data: existingAccount } = await supabaseAdmin
-      .from('google_accounts')
-      .select('email')
-      .eq('booking_slug', slug)
-      .single()
+    const rows = await sql`
+      SELECT email FROM google_accounts WHERE booking_slug = ${slug} LIMIT 1
+    `
+    const existingAccount = rows[0]
 
     if (existingAccount && existingAccount.email !== sessionEmail) {
       return NextResponse.json({
@@ -152,16 +130,9 @@ export async function PATCH(request: NextRequest) {
       }, { status: 409 })
     }
 
-    // Update the slug
-    const { error: updateError } = await supabaseAdmin
-      .from('google_accounts')
-      .update({ booking_slug: slug })
-      .eq('email', sessionEmail)
-
-    if (updateError) {
-      console.error('Error updating booking slug:', updateError)
-      return NextResponse.json({ error: 'Failed to update booking slug' }, { status: 500 })
-    }
+    await sql`
+      UPDATE google_accounts SET booking_slug = ${slug} WHERE email = ${sessionEmail}
+    `
 
     return NextResponse.json({ success: true, slug })
   } catch (error) {

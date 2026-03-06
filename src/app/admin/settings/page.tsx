@@ -312,7 +312,7 @@ export default function SettingsPage() {
           <div className="mb-6 p-4 bg-orange-950/50 border border-orange-800 rounded-lg">
             <h3 className="font-semibold text-orange-300 mb-2">Database Setup Required</h3>
             <p className="text-orange-400 text-sm mb-3">
-              The multi-account feature requires a database table. Please run this SQL in your Supabase SQL Editor:
+              The multi-account feature requires a database table. Please run this SQL in your database:
             </p>
             <pre className="bg-zinc-900 text-green-400 p-3 rounded text-xs overflow-x-auto">
 {`CREATE TABLE google_accounts (

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { sql } from '@/lib/db'
 
 // Prevent caching
 export const dynamic = 'force-dynamic'
@@ -16,12 +16,11 @@ export async function GET() {
   try {
     const session = JSON.parse(Buffer.from(sessionCookie, 'base64').toString())
 
-    // Get accounts for this session email
-    const { data: allAccounts } = await supabaseAdmin
-      .from('google_accounts')
-      .select('email, owner_email, is_primary')
+    const allAccounts = await sql`
+      SELECT email, owner_email, is_primary FROM google_accounts
+    `
 
-    const filteredAccounts = (allAccounts || []).filter(a => a.owner_email === session.email)
+    const filteredAccounts = allAccounts.filter(a => a.owner_email === session.email)
 
     return NextResponse.json({
       sessionEmail: session.email,

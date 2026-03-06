@@ -4,7 +4,7 @@ import { startOfDay, addDays } from 'date-fns'
 import { getAllGoogleAccounts, getValidAccessTokenForAccount } from '@/lib/google/accounts'
 import { getFreeBusy } from '@/lib/google/calendar'
 import { generateSlots } from '@/lib/utils/slots'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { sql } from '@/lib/db'
 
 // Prevent caching
 export const dynamic = 'force-dynamic'
@@ -49,24 +49,21 @@ export async function GET(request: NextRequest) {
     try {
       if (slug) {
         // Look up the owner by booking slug
-        const { data: slugOwner } = await supabaseAdmin
-          .from('google_accounts')
-          .select('owner_email')
-          .eq('booking_slug', slug)
-          .single()
+        const rows = await sql`
+          SELECT owner_email FROM google_accounts WHERE booking_slug = ${slug} LIMIT 1
+        `
+        const slugOwner = rows[0]
 
         console.log('Slug owner lookup result:', slugOwner)
 
         if (slugOwner?.owner_email) {
           ownerEmail = slugOwner.owner_email
-          // Get ALL accounts owned by this user
           accounts = await getAllGoogleAccounts(ownerEmail || undefined)
           console.log('Found', accounts.length, 'accounts for owner', ownerEmail)
         } else {
           console.log('No owner found for slug:', slug)
         }
       } else {
-        // Get logged-in user's accounts
         const sessionEmail = await getSessionEmail()
         console.log('Session email:', sessionEmail)
         if (sessionEmail) {
@@ -79,15 +76,13 @@ export async function GET(request: NextRequest) {
       console.log('Could not fetch google_accounts:', error)
     }
 
-    // Get owner settings for schedule configuration - filter by owner email
+    // Get owner settings for schedule configuration
     let settings
     if (ownerEmail) {
-      const { data } = await supabaseAdmin
-        .from('owner_settings')
-        .select('*')
-        .eq('email', ownerEmail)
-        .single()
-      settings = data
+      const rows = await sql`
+        SELECT * FROM owner_settings WHERE email = ${ownerEmail} LIMIT 1
+      `
+      settings = rows[0]
     }
 
     // Fall back to default settings if none found
@@ -114,12 +109,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Get existing bookings for the date
-    const { data: bookings } = await supabaseAdmin
-      .from('bookings')
-      .select('*')
-      .gte('start_time', date.toISOString())
-      .lt('start_time', nextDay.toISOString())
-      .eq('status', 'confirmed')
+    const bookings = await sql`
+      SELECT * FROM bookings
+      WHERE start_time >= ${date.toISOString()}
+        AND start_time < ${nextDay.toISOString()}
+        AND status = 'confirmed'
+    `
 
     // Aggregate busy times from accounts
     let allBusyTimes: { start: string; end: string }[] = []
@@ -128,7 +123,6 @@ export async function GET(request: NextRequest) {
       console.log('Processing account:', account.email)
       const accessToken = await getValidAccessTokenForAccount(account)
       if (accessToken) {
-        // Default to ['primary'] if calendar_ids is null, undefined, or empty array
         const rawCalendarIds = account.calendar_ids as string[] | null | undefined
         const calendarIds = rawCalendarIds && rawCalendarIds.length > 0 ? rawCalendarIds : ['primary']
         console.log('Fetching busy times from calendars:', calendarIds)
@@ -145,8 +139,7 @@ export async function GET(request: NextRequest) {
     }
     console.log('Total busy times:', allBusyTimes.length)
 
-    // Pass the date string (YYYY-MM-DD) to generateSlots for proper timezone handling
-    const slots = generateSlots(dateParam, settings, allBusyTimes, bookings || [])
+    const slots = generateSlots(dateParam, settings as any, allBusyTimes, (bookings || []) as any)
 
     return NextResponse.json({
       date: dateParam,

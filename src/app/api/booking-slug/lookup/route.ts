@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { sql } from '@/lib/db'
 
 // GET - Look up owner by booking slug
 export async function GET(request: NextRequest) {
@@ -11,14 +11,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Slug is required' }, { status: 400 })
     }
 
-    // Look up account by booking slug
-    const { data: account, error } = await supabaseAdmin
-      .from('google_accounts')
-      .select('email, name')
-      .eq('booking_slug', slug)
-      .single()
+    const rows = await sql`
+      SELECT email, name FROM google_accounts WHERE booking_slug = ${slug} LIMIT 1
+    `
+    const account = rows[0]
 
-    if (error || !account) {
+    if (!account) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { sql } from '@/lib/db'
 import { bookingSchema } from '@/lib/utils/validation'
-import { getPrimaryAccount, getValidAccessTokenForAccount } from '@/lib/google/accounts'
+import { getPrimaryAccount, getValidAccessTokenForAccount, type GoogleAccount } from '@/lib/google/accounts'
 import { createCalendarEvent } from '@/lib/google/calendar'
 
 export async function POST(request: NextRequest) {
@@ -20,17 +20,22 @@ export async function POST(request: NextRequest) {
     const { guestName, guestEmail, meetingTitle, message, startTime, endTime, timezone, slug } = validation.data
 
     // Use the conflict-checking function
-    const { data: bookingId, error } = await supabaseAdmin.rpc('create_booking_if_available', {
-      p_guest_name: guestName,
-      p_guest_email: guestEmail,
-      p_message: message || null,
-      p_start_time: startTime,
-      p_end_time: endTime,
-      p_timezone: timezone
-    })
-
-    if (error) {
-      if (error.message.includes('Slot no longer available')) {
+    let bookingId: string
+    try {
+      const result = await sql`
+        SELECT create_booking_if_available(
+          ${guestName},
+          ${guestEmail},
+          ${message || null},
+          ${startTime},
+          ${endTime},
+          ${timezone}
+        ) as id
+      `
+      bookingId = result[0].id
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error)
+      if (msg.includes('Slot no longer available')) {
         return NextResponse.json(
           { error: 'This time slot is no longer available. Please select another time.' },
           { status: 409 }
@@ -41,16 +46,13 @@ export async function POST(request: NextRequest) {
 
     // Create Google Calendar event with invites
     let googleEventId: string | null = null
-    let ownerAccount = null
+    let ownerAccount: GoogleAccount | null = null
 
-    // If slug is provided, look up the account by slug, otherwise use primary account
     if (slug) {
-      const { data: slugAccount } = await supabaseAdmin
-        .from('google_accounts')
-        .select('*')
-        .eq('booking_slug', slug)
-        .single()
-      ownerAccount = slugAccount
+      const rows = await sql`
+        SELECT * FROM google_accounts WHERE booking_slug = ${slug} LIMIT 1
+      `
+      ownerAccount = (rows[0] as GoogleAccount) || null
     } else {
       ownerAccount = await getPrimaryAccount()
     }
@@ -70,12 +72,10 @@ export async function POST(request: NextRequest) {
           timezone
         })
 
-        // Update booking with Google event ID
         if (googleEventId) {
-          await supabaseAdmin
-            .from('bookings')
-            .update({ google_event_id: googleEventId })
-            .eq('id', bookingId)
+          await sql`
+            UPDATE bookings SET google_event_id = ${googleEventId} WHERE id = ${bookingId}
+          `
         }
       }
     }
@@ -116,26 +116,26 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get('status')
   const upcoming = searchParams.get('upcoming') === 'true'
 
-  let query = supabaseAdmin
-    .from('bookings')
-    .select('*')
-    .order('start_time', { ascending: true })
-
-  if (status) {
-    query = query.eq('status', status)
+  let bookings
+  if (status && upcoming) {
+    bookings = await sql`
+      SELECT * FROM bookings
+      WHERE status = ${status} AND start_time >= ${new Date().toISOString()}
+      ORDER BY start_time ASC
+    `
+  } else if (status) {
+    bookings = await sql`
+      SELECT * FROM bookings WHERE status = ${status} ORDER BY start_time ASC
+    `
+  } else if (upcoming) {
+    bookings = await sql`
+      SELECT * FROM bookings WHERE start_time >= ${new Date().toISOString()} ORDER BY start_time ASC
+    `
+  } else {
+    bookings = await sql`SELECT * FROM bookings ORDER BY start_time ASC`
   }
 
-  if (upcoming) {
-    query = query.gte('start_time', new Date().toISOString())
-  }
-
-  const { data, error } = await query
-
-  if (error) {
-    return NextResponse.json({ error: 'Failed to fetch bookings' }, { status: 500 })
-  }
-
-  return NextResponse.json({ bookings: data })
+  return NextResponse.json({ bookings })
 }
 
 export async function PATCH(request: NextRequest) {
@@ -154,25 +154,18 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Booking ID required' }, { status: 400 })
     }
 
-    const updateData: Record<string, unknown> = {}
-
-    if (status) {
-      updateData.status = status
-      if (status === 'cancelled') {
-        updateData.cancelled_at = new Date().toISOString()
-        if (cancellationReason) {
-          updateData.cancellation_reason = cancellationReason
-        }
-      }
-    }
-
-    const { error } = await supabaseAdmin
-      .from('bookings')
-      .update(updateData)
-      .eq('id', id)
-
-    if (error) {
-      return NextResponse.json({ error: 'Failed to update booking' }, { status: 500 })
+    if (status === 'cancelled') {
+      await sql`
+        UPDATE bookings
+        SET status = ${status},
+            cancelled_at = ${new Date().toISOString()},
+            cancellation_reason = ${cancellationReason || null}
+        WHERE id = ${id}
+      `
+    } else if (status) {
+      await sql`
+        UPDATE bookings SET status = ${status} WHERE id = ${id}
+      `
     }
 
     return NextResponse.json({ success: true })

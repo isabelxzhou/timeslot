@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { getAllGoogleAccounts, getValidAccessTokenForAccount } from '@/lib/google/accounts'
 import { getCalendarList } from '@/lib/google/calendar'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { sql } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,26 +81,18 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Verify the account belongs to this user
-    const { data: account } = await supabaseAdmin
-      .from('google_accounts')
-      .select('id, owner_email')
-      .eq('email', accountEmail)
-      .single()
+    const rows = await sql`
+      SELECT id, owner_email FROM google_accounts WHERE email = ${accountEmail} LIMIT 1
+    `
+    const account = rows[0]
 
     if (!account || account.owner_email !== sessionEmail) {
       return NextResponse.json({ error: 'Account not found' }, { status: 404 })
     }
 
-    // Update calendar_ids
-    const { error } = await supabaseAdmin
-      .from('google_accounts')
-      .update({ calendar_ids: calendarIds })
-      .eq('email', accountEmail)
-
-    if (error) {
-      console.error('Error updating calendars:', error)
-      return NextResponse.json({ error: 'Failed to update calendars' }, { status: 500 })
-    }
+    await sql`
+      UPDATE google_accounts SET calendar_ids = ${JSON.stringify(calendarIds)}::jsonb WHERE email = ${accountEmail}
+    `
 
     return NextResponse.json({ success: true })
   } catch (error) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { sql } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,19 +26,14 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Get settings for this user
-  const { data, error } = await supabaseAdmin
-    .from('owner_settings')
-    .select('weekly_schedule, timezone, slot_duration_minutes, buffer_minutes, min_notice_hours, booking_window_days')
-    .eq('email', sessionEmail)
-    .single()
+  const rows = await sql`
+    SELECT weekly_schedule, timezone, slot_duration_minutes, buffer_minutes, min_notice_hours, booking_window_days
+    FROM owner_settings
+    WHERE email = ${sessionEmail}
+    LIMIT 1
+  `
+  const data = rows[0]
 
-  if (error && error.code !== 'PGRST116') {
-    console.error('Error fetching settings:', error)
-    return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 })
-  }
-
-  // Return default settings if none exist
   const defaultSchedule = {
     monday: [{ start: '09:00', end: '17:00' }],
     tuesday: [{ start: '09:00', end: '17:00' }],
@@ -71,43 +66,34 @@ export async function PATCH(request: NextRequest) {
     const { weekly_schedule, timezone, slot_duration_minutes, buffer_minutes, min_notice_hours } = body
 
     // Check if settings exist for this user
-    const { data: existing } = await supabaseAdmin
-      .from('owner_settings')
-      .select('id')
-      .eq('email', sessionEmail)
-      .single()
+    const existing = await sql`
+      SELECT id FROM owner_settings WHERE email = ${sessionEmail} LIMIT 1
+    `
 
-    const updateData: Record<string, unknown> = {}
-    if (weekly_schedule !== undefined) updateData.weekly_schedule = weekly_schedule
-    if (timezone !== undefined) updateData.timezone = timezone
-    if (slot_duration_minutes !== undefined) updateData.slot_duration_minutes = slot_duration_minutes
-    if (buffer_minutes !== undefined) updateData.buffer_minutes = buffer_minutes
-    if (min_notice_hours !== undefined) updateData.min_notice_hours = min_notice_hours
-
-    if (existing) {
-      const { error } = await supabaseAdmin
-        .from('owner_settings')
-        .update(updateData)
-        .eq('email', sessionEmail)
-
-      if (error) {
-        console.error('Error updating settings:', error)
-        return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 })
-      }
+    if (existing.length > 0) {
+      // Build dynamic update - always update all provided fields
+      await sql`
+        UPDATE owner_settings
+        SET weekly_schedule = COALESCE(${weekly_schedule ? JSON.stringify(weekly_schedule) : null}::jsonb, weekly_schedule),
+            timezone = COALESCE(${timezone ?? null}, timezone),
+            slot_duration_minutes = COALESCE(${slot_duration_minutes ?? null}, slot_duration_minutes),
+            buffer_minutes = COALESCE(${buffer_minutes ?? null}, buffer_minutes),
+            min_notice_hours = COALESCE(${min_notice_hours ?? null}, min_notice_hours)
+        WHERE email = ${sessionEmail}
+      `
     } else {
-      // Create new settings record
-      const { error } = await supabaseAdmin
-        .from('owner_settings')
-        .insert({
-          email: sessionEmail,
-          name: sessionEmail.split('@')[0],
-          ...updateData
-        })
-
-      if (error) {
-        console.error('Error creating settings:', error)
-        return NextResponse.json({ error: 'Failed to create settings' }, { status: 500 })
-      }
+      await sql`
+        INSERT INTO owner_settings (email, name, weekly_schedule, timezone, slot_duration_minutes, buffer_minutes, min_notice_hours)
+        VALUES (
+          ${sessionEmail},
+          ${sessionEmail.split('@')[0]},
+          ${weekly_schedule ? JSON.stringify(weekly_schedule) : '{"monday":[{"start":"09:00","end":"17:00"}],"tuesday":[{"start":"09:00","end":"17:00"}],"wednesday":[{"start":"09:00","end":"17:00"}],"thursday":[{"start":"09:00","end":"17:00"}],"friday":[{"start":"09:00","end":"17:00"}],"saturday":[],"sunday":[]}'}::jsonb,
+          ${timezone || 'America/New_York'},
+          ${slot_duration_minutes || 30},
+          ${buffer_minutes || 0},
+          ${min_notice_hours || 24}
+        )
+      `
     }
 
     return NextResponse.json({ success: true })
