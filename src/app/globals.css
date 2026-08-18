@@ -102,3 +102,12 @@ body {
   scrollbar-width: thin;
   scrollbar-color: #3f3f46 #18181b;
 }
+
+/* Hide scrollbar (mobile day strip) while keeping scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
