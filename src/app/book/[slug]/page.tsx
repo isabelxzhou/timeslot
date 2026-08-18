@@ -79,6 +79,7 @@ export default function BookBySlugPage() {
   const [ownerEmail, setOwnerEmail] = useState<string>('')
   const [notFound, setNotFound] = useState(false)
   const [currentWeek, setCurrentWeek] = useState(() => startOfWeek(new Date(), { weekStartsOn: 0 }))
+  const [selectedDay, setSelectedDay] = useState<string>(() => format(new Date(), 'yyyy-MM-dd'))
   const [weekSlots, setWeekSlots] = useState<DaySlots[]>([])
   const [selectedSlot, setSelectedSlot] = useState<{ date: string; slot: TimeSlot } | null>(null)
   const [loading, setLoading] = useState(true)
@@ -151,6 +152,29 @@ export default function BookBySlugPage() {
 
     fetchWeekAvailability()
   }, [currentWeek, ownerEmail, slug, notFound])
+
+  // Keep the mobile day-picker selection inside the visible week.
+  // Prefer today, else the first day that isn't in the past, else the week start.
+  useEffect(() => {
+    const inWeek = weekDays.some(d => format(d, 'yyyy-MM-dd') === selectedDay)
+    if (inWeek) return
+    const today = startOfDay(new Date())
+    const firstFuture = weekDays.find(d => d >= today) || weekDays[0]
+    setSelectedDay(format(firstFuture, 'yyyy-MM-dd'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentWeek])
+
+  // Bookable 30-min slots for a given day (API marks past/busy times unavailable).
+  const getBookableSlots = useCallback((dateStr: string): TimeSlot[] => {
+    const day = weekSlots.find(d => d.date === dateStr)
+    if (!day) return []
+    return day.slots.filter(s => s.available)
+  }, [weekSlots])
+
+  const handlePickSlot = (dateStr: string, slot: TimeSlot) => {
+    setSelectedSlot({ date: dateStr, slot })
+    setShowForm(true)
+  }
 
   const handleBack = () => {
     setShowForm(false)
@@ -398,7 +422,7 @@ export default function BookBySlugPage() {
               <Logo showText={false} href="/" />
               <div>
                 <h1 className="text-lg md:text-xl font-bold text-white">book with {ownerName}</h1>
-                <p className="text-xs md:text-sm text-zinc-400">drag to select a time</p>
+                <p className="text-xs md:text-sm text-zinc-400"><span className="md:hidden">pick a time that works</span><span className="hidden md:inline">tap or drag to select a time</span></p>
               </div>
             </div>
             <div className="flex items-center justify-between md:justify-end gap-1 md:gap-2">
@@ -434,8 +458,8 @@ export default function BookBySlugPage() {
         </div>
       </header>
 
-      {/* Legend */}
-      <div className="bg-zinc-900/50 backdrop-blur-sm border-b border-zinc-800/50 px-2 md:px-4 py-2">
+      {/* Legend (desktop drag grid only) */}
+      <div className="hidden md:block bg-zinc-900/50 backdrop-blur-sm border-b border-zinc-800/50 px-2 md:px-4 py-2">
         <div className="max-w-7xl mx-auto flex items-center justify-center gap-4 md:gap-6 text-xs md:text-sm">
           <div className="flex items-center gap-1.5 md:gap-2">
             <div className="w-3 h-3 md:w-4 md:h-4 border-2 border-dashed border-violet-400 rounded" />
@@ -493,13 +517,90 @@ export default function BookBySlugPage() {
       )}
 
       {/* Calendar Grid */}
-      <div className="max-w-7xl mx-auto px-1 md:px-2 pb-8">
+      <div className="max-w-7xl mx-auto px-4 md:px-2 pb-8">
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin h-10 w-10 border-4 border-zinc-700 border-t-violet-500 rounded-full" />
           </div>
         ) : (
-          <div className="bg-zinc-900/80 backdrop-blur-sm rounded-xl border border-zinc-800/50 mt-2 md:mt-4 flex flex-col" style={{ height: 'calc(100vh - 180px)' }}>
+          <>
+          {/* ===== Mobile view: day picker + tappable slot list ===== */}
+          <div className="md:hidden mt-3">
+            {/* Day strip */}
+            <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 no-scrollbar snap-x">
+              {weekDays.map((day, i) => {
+                const dateStr = format(day, 'yyyy-MM-dd')
+                const isSelected = dateStr === selectedDay
+                const isPast = day < startOfDay(new Date())
+                const isToday = isSameDay(day, new Date())
+                const count = getBookableSlots(dateStr).length
+                return (
+                  <button
+                    key={i}
+                    onClick={() => !isPast && setSelectedDay(dateStr)}
+                    disabled={isPast}
+                    className={`snap-start flex-shrink-0 w-[52px] py-2.5 rounded-2xl border flex flex-col items-center gap-0.5 transition-all ${
+                      isSelected
+                        ? 'bg-gradient-to-b from-violet-600 to-fuchsia-600 border-transparent shadow-lg shadow-violet-500/25'
+                        : isPast
+                          ? 'border-zinc-800/50 opacity-40'
+                          : 'bg-zinc-900/60 border-zinc-800 active:bg-zinc-800'
+                    }`}
+                  >
+                    <span className={`text-[10px] uppercase tracking-wider font-semibold ${isSelected ? 'text-violet-100' : 'text-zinc-500'}`}>
+                      {format(day, 'EEE')}
+                    </span>
+                    <span className={`text-lg font-bold leading-none ${isSelected ? 'text-white' : isToday ? 'text-violet-400' : 'text-zinc-300'}`}>
+                      {format(day, 'd')}
+                    </span>
+                    <span className={`mt-1 w-1.5 h-1.5 rounded-full ${
+                      isSelected ? 'bg-white' : count > 0 && !isPast ? 'bg-violet-500/70' : 'bg-transparent'
+                    }`} />
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Selected day label */}
+            <div className="flex items-baseline justify-between mt-4 mb-2 px-0.5">
+              <h2 className="text-base font-semibold text-white">
+                {format(parseISO(selectedDay), 'EEEE, MMMM d')}
+              </h2>
+              <span className="text-xs text-zinc-500">
+                {getBookableSlots(selectedDay).length} open
+              </span>
+            </div>
+
+            {/* Slot list */}
+            {(() => {
+              const slots = getBookableSlots(selectedDay)
+              if (slots.length === 0) {
+                return (
+                  <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl py-12 px-6 text-center mt-1">
+                    <div className="text-3xl mb-2">🌙</div>
+                    <p className="text-zinc-300 font-medium">No times available</p>
+                    <p className="text-zinc-500 text-sm mt-1">Try another day.</p>
+                  </div>
+                )
+              }
+              return (
+                <div className="grid grid-cols-2 gap-2 pb-6">
+                  {slots.map((slot, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handlePickSlot(selectedDay, slot)}
+                      className="min-h-[52px] rounded-xl border border-zinc-800 bg-zinc-900/70 text-white font-semibold text-[15px] flex items-center justify-center active:scale-[0.98] active:border-violet-500 active:bg-violet-600/20 transition-all"
+                    >
+                      {format(parseISO(slot.start), 'h:mm a')}
+                    </button>
+                  ))}
+                </div>
+              )
+            })()}
+          </div>
+
+          {/* ===== Desktop view: drag-to-book week grid ===== */}
+          <div className="hidden md:flex bg-zinc-900/80 backdrop-blur-sm rounded-xl border border-zinc-800/50 mt-2 md:mt-4 flex-col" style={{ height: 'calc(100vh - 180px)' }}>
             {/* Day Headers */}
             <div className="grid grid-cols-[auto_repeat(7,1fr)] md:grid-cols-8 border-b border-zinc-800 flex-shrink-0 overflow-x-auto">
               <div className="min-w-[50px] md:min-w-[64px] border-r border-zinc-800 sticky left-0 bg-zinc-900 z-10" />
@@ -609,6 +710,7 @@ export default function BookBySlugPage() {
               })}
             </div>
           </div>
+          </>
         )}
       </div>
 
